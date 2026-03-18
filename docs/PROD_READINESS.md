@@ -63,7 +63,7 @@ These were fixed because they teach good engineering habits regardless of contex
 | 10 | **Keyword router limitations** | Deterministic keyword scoring with hardcoded boosts. Works for demo queries, fails on ambiguous ones. | LLM-based router with deterministic fallback. Already noted in ARCHITECTURE.md cutover plan. | Medium |
 | 11 | **E2E test suite** | No tests. | Cover: routing decisions, streaming contract, backend swap (stub vs HTTP), tool dispatch, error paths. | Medium |
 | 12 | **CI/CD pipeline** | Docker exists, no automation. | GitHub Actions or equivalent: build, test, Docker publish, deploy. | Low |
-| 13 | **OTEL observability** | OTLP exporter configured (traces, metrics, logs). Custom `FhirCopilot.Agent` meter with request counters, duration histograms, session lifecycle, and routing decision metrics. | Define alert rules for error rate spikes and latency degradation. | Low |
+| 13 | ~~**OTEL observability**~~ | Arize Phoenix deployed on Fly.io (`fhir-copilot-phoenix`). All traces, metrics, logs flowing. Local Phoenix via Docker for dev. | Define alert rules for error rate spikes and latency degradation. | Done (backend); alerts remaining |
 | 14 | **Microsoft.Agents.AI stability** | Pinned to `1.0.0-rc4` (prerelease). | Monitor for GA release. RC versions may have breaking API changes. Pin version and test upgrades explicitly. | Ongoing |
 
 ## Next Steps
