@@ -6,7 +6,7 @@ COPY src/FhirCopilot.Api/FhirCopilot.Api.csproj src/FhirCopilot.Api/
 RUN dotnet restore src/FhirCopilot.Api/FhirCopilot.Api.csproj
 
 COPY src/ src/
-RUN dotnet publish src/FhirCopilot.Api/FhirCopilot.Api.csproj -c Release -o /app --no-restore
+RUN dotnet publish src/FhirCopilot.Api/FhirCopilot.Api.csproj -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-preview AS runtime
 WORKDIR /app
