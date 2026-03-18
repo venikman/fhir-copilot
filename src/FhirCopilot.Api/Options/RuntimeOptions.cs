@@ -22,15 +22,8 @@ public sealed class ProviderOptions
 
     public bool HasFhirBaseUrl => !string.IsNullOrWhiteSpace(FhirBaseUrl);
 
-    public List<string> GetModelChain()
-    {
-        if (GeminiModels?.Count > 0)
-        {
-            return GeminiModels;
-        }
+    private const string DefaultModel = "gemini-3-flash-preview";
 
-        return string.IsNullOrWhiteSpace(GeminiModel)
-            ? new List<string> { "gemini-3-flash-preview" }
-            : new List<string> { GeminiModel };
-    }
+    public IReadOnlyList<string> GetModelChain() =>
+        GeminiModels is { Count: > 0 } ? GeminiModels : [GeminiModel ?? DefaultModel];
 }

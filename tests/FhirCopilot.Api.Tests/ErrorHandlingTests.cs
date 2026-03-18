@@ -10,9 +10,11 @@ using Microsoft.Extensions.Hosting;
 
 namespace FhirCopilot.Api.Tests;
 
-public class ErrorHandlingTests
+public class ErrorHandlingTests : IDisposable
 {
-    private static HttpClient CreateClientWithRunner<TRunner>() where TRunner : class, IAgentRunner
+    private readonly List<WebApplicationFactory<Program>> _factories = [];
+
+    private HttpClient CreateClientWithRunner<TRunner>() where TRunner : class, IAgentRunner
     {
         var factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
@@ -32,7 +34,14 @@ public class ErrorHandlingTests
                     });
                 });
             });
+        _factories.Add(factory);
         return factory.CreateClient();
+    }
+
+    public void Dispose()
+    {
+        foreach (var factory in _factories)
+            factory.Dispose();
     }
 
     [Fact]

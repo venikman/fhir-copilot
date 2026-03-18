@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
+using FhirCopilot.ServiceDefaults;
 using MEOptions = Microsoft.Extensions.Options.Options;
 
 namespace FhirCopilot.Api.Tests;

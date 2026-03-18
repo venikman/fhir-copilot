@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text;
@@ -67,7 +68,7 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
                 }
 
                 var answer = answerBuilder.ToString().Trim();
-                System.Diagnostics.Activity.Current?.SetTag("copilot.model", model);
+                Activity.Current?.SetTag("copilot.model", model);
                 _logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
                     profile.Name, threadId, model, answer.Length);
                 return BuildResponse(answer, profile, threadId);
@@ -140,7 +141,7 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
             if (succeeded)
             {
                 var answer = answerBuilder.ToString().Trim();
-                System.Diagnostics.Activity.Current?.SetTag("copilot.model", model);
+                Activity.Current?.SetTag("copilot.model", model);
                 _logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
                     profile.Name, threadId, model, answer.Length);
                 yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));

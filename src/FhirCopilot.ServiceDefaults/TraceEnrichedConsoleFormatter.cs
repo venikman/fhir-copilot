@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 
+namespace FhirCopilot.ServiceDefaults;
+
 public sealed class TraceEnrichedConsoleFormatter : ConsoleFormatter
 {
     public const string FormatterName = "trace-enriched";

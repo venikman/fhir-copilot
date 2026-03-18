@@ -106,21 +106,31 @@ public sealed class CopilotService : ICopilotService
             agentType, threadId, _runner.GetType().Name);
 
         var completed = false;
-        IAsyncEnumerable<CopilotStreamEvent>? events = null;
-        Exception? caughtException = null;
-
+        var enumerator = _runner.StreamAsync(profile, request.Query, threadId, cancellationToken)
+            .GetAsyncEnumerator(cancellationToken);
         try
         {
-            events = StreamEventsAsync(profile, request.Query, threadId, cancellationToken);
+            while (true)
+            {
+                bool moved;
+                try
+                {
+                    moved = await enumerator.MoveNextAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Copilot stream failed for agent {AgentType}", agentType);
+                    throw;
+                }
+
+                if (!moved) break;
+                yield return enumerator.Current;
+            }
             completed = true;
-        }
-        catch (Exception ex)
-        {
-            caughtException = ex;
-            _logger.LogError(ex, "Copilot stream failed for agent {AgentType}", agentType);
         }
         finally
         {
+            await enumerator.DisposeAsync();
             sw.Stop();
             var tags = new TagList
             {
@@ -130,28 +140,6 @@ public sealed class CopilotService : ICopilotService
             RequestCounter.Add(1, tags);
             DurationHistogram.Record(sw.Elapsed.TotalMilliseconds,
                 new KeyValuePair<string, object?>("copilot.agent", agentType));
-        }
-
-        if (caughtException != null)
-        {
-            throw caughtException;
-        }
-
-        await foreach (var evt in events!)
-        {
-            yield return evt;
-        }
-    }
-
-    private async IAsyncEnumerable<CopilotStreamEvent> StreamEventsAsync(
-        AgentProfile profile,
-        string query,
-        string threadId,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await foreach (var evt in _runner.StreamAsync(profile, query, threadId, cancellationToken))
-        {
-            yield return evt;
         }
     }
 
