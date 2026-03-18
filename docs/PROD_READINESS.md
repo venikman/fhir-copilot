@@ -47,37 +47,30 @@ These were fixed because they teach good engineering habits regardless of contex
 | 4 | **Inconsistent error handling in HttpFhirBackend** | `FetchAllEntriesAsync` now logs and breaks on HTTP errors instead of throwing `HttpRequestException`. All paths (search, read, export) now log failures consistently and return empty/null results. | Search methods threw unhandled exceptions while read/export silently returned null. Pick one pattern and stick with it. |
 | 5 | **Structured logging via ILogger** | Added `ILogger<T>` to `CopilotService`, `GeminiAgentFrameworkRunner`, `KeywordIntentRouter`, and `HttpFhirBackend`. Logs routing decisions, session lifecycle, FHIR errors, and agent runs. | ILogger is the standard .NET abstraction that OTEL, Seq, Application Insights, and every other sink hooks into. Adding it now means OTEL integration is a one-line `AddOpenTelemetry()` call later, not a retrofit. |
 
-## Accepted for Prototype — Required for Prod
+## Out of Scope (prototype/demo)
 
-| # | Gap | Current State | Prod Requirement | Effort |
-|---|-----|---------------|------------------|--------|
-| 1 | **Authentication & authorization** | No auth middleware. Endpoints are open. | OIDC/JWT + SMART-on-FHIR scopes. Minimum: bearer token validation on all `/api/*` routes. | Medium |
-| 2 | **Audit logging** | No audit trail for who queried what. | HIPAA requires audit logs for PHI access. Log user identity, query, agent used, resources accessed. | Medium |
-| 3 | **Session durability** | In-memory `ConcurrentDictionary`, lost on restart. | Redis or distributed cache for HA. Sessions must survive deployments. | Medium |
-| 4 | **LRU eviction strategy** | Drops 50% of sessions when hitting 200 cap. | Gradual eviction (10% or TTL-based expiry). Consider `IMemoryCache` with sliding expiration. | Low |
-| 5 | **Bulk export orchestration** | Synchronous 30-second polling loop blocks the agent. | Background jobs or durable orchestration (e.g., Hangfire, Azure Durable Functions). Real exports take minutes/hours. | High |
-| 6 | **Rate limiting** | Gemini API calls are unbounded per user. | Per-tenant/per-user throttling. ASP.NET Core rate limiting middleware or API gateway. | Low |
-| 7 | **Calculator sandboxing** | `DataTable.Compute()` evaluates arbitrary expressions. | Replace with a sandboxed expression parser (e.g., NCalc, custom tokenizer). Low risk in demo but not acceptable for prod. | Low |
-| 8 | **Tool return types** | All tools return serialized JSON strings, not typed objects. | When Microsoft.Agents.AI reaches GA, migrate to typed tool results for introspection and validation. | Medium |
-| 9 | **Citation extraction** | Regex on LLM output text (`Patient/123` patterns). | Explicit `EvidenceItem` results emitted by tools. Already noted in ARCHITECTURE.md cutover plan. | Medium |
-| 10 | **Keyword router limitations** | Deterministic keyword scoring with hardcoded boosts. Works for demo queries, fails on ambiguous ones. | LLM-based router with deterministic fallback. Already noted in ARCHITECTURE.md cutover plan. | Medium |
-| 11 | **E2E test suite** | No tests. | Cover: routing decisions, streaming contract, backend swap (stub vs HTTP), tool dispatch, error paths. | Medium |
-| 12 | **CI/CD pipeline** | Docker exists, no automation. | GitHub Actions or equivalent: build, test, Docker publish, deploy. | Low |
-| 13 | ~~**OTEL observability**~~ | Arize Phoenix deployed on Fly.io (`fhir-copilot-phoenix`). All traces, metrics, logs flowing. Local Phoenix via Docker for dev. | Define alert rules for error rate spikes and latency degradation. | Done (backend); alerts remaining |
-| 14 | **Microsoft.Agents.AI stability** | Pinned to `1.0.0-rc4` (prerelease). | Monitor for GA release. RC versions may have breaking API changes. Pin version and test upgrades explicitly. | Ongoing |
+These are real prod concerns but won't be pursued — this project stays at demo/prototype scope.
 
-## Next Steps
+| Gap | Why skipped |
+|-----|-------------|
+| Authentication & authorization | Demo runs against synthetic FHIR data, no real PHI |
+| Audit logging (HIPAA) | No real patients, no compliance requirement |
+| Session durability (Redis) | In-memory is fine for single-instance demo |
+| LRU eviction tuning | 200-session cap with 50% drop is adequate for demo load |
+| Bulk export orchestration | Demo uses small datasets; synchronous polling is acceptable |
+| Rate limiting | Single-user demo, no abuse vector |
+| Calculator sandboxing | `DataTable.Compute()` risk is negligible without untrusted input |
+| Typed tool returns | Blocked on Microsoft.Agents.AI GA; JSON strings work fine |
+| Citation extraction upgrade | Regex approach works for demo queries |
+| LLM-based router | Keyword router covers the demo query set |
+| E2E test suite | Unit tests (38) cover the critical paths |
+| CI/CD pipeline | Manual `fly deploy` is sufficient |
+| OTEL alert rules | Traces/metrics flow to Phoenix; alerting is ops, not demo |
+| Microsoft.Agents.AI GA tracking | Pinned to rc4, no action until GA ships |
+| Multi-provider support | IAgentRunner interface is ready if needed later |
+| Token usage tracking | Spans already capture gen_ai usage; dashboard is optional |
+| Response caching | Demo latency is acceptable without caching |
 
-### High priority
-1. ~~**Error handling for Gemini failures**~~ — Done (step 13)
-2. ~~**Structured logging enrichment**~~ — Done (step 15)
+## Status
 
-### Medium priority
-4. ~~**Aspire AppHost enhancements**~~ — Done (step 16)
-5. **Integration test with real Gemini** — Optional test category that hits the real API (skipped in CI without GEMINI_API_KEY)
-6. **Response caching** — Cache FHIR backend responses to reduce latency on repeated tool calls within a session
-
-### Nice to have
-7. **Multi-provider support** — IAgentRunner implementations for Claude, Azure OpenAI (the interface is ready)
-8. **Token usage tracking** — Extract gen_ai.usage.input_tokens/output_tokens from GenAI spans into a dashboard panel
-9. **Alert rules** — Define OTEL alert rules for error rate spikes or latency degradation
+All planned work is complete. See **Completed Work** (16 steps) and **Addressed in This Prototype** (5 fixes) above.

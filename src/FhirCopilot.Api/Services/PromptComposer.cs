@@ -13,7 +13,7 @@ public static class PromptComposer
         builder.AppendLine($"Purpose: {profile.Purpose}");
         builder.AppendLine();
 
-        if (profile.DomainContext.Length > 0)
+        if (profile.DomainContext.Count > 0)
         {
             builder.AppendLine("Domain context:");
             foreach (var line in profile.DomainContext)
@@ -24,10 +24,10 @@ public static class PromptComposer
             builder.AppendLine();
         }
 
-        if (profile.Instructions.Length > 0)
+        if (profile.Instructions.Count > 0)
         {
             builder.AppendLine("Operating instructions:");
-            for (var index = 0; index < profile.Instructions.Length; index++)
+            for (var index = 0; index < profile.Instructions.Count; index++)
             {
                 builder.AppendLine($"{index + 1}. {profile.Instructions[index]}");
             }
@@ -46,7 +46,7 @@ public static class PromptComposer
             ? "- Include a short reasoning summary."
             : "- Do not emit a reasoning summary unless needed.");
 
-        if (profile.ResponseContract.StructuredSections.Length > 0)
+        if (profile.ResponseContract.StructuredSections.Count > 0)
         {
             builder.AppendLine("- Use these sections when relevant:");
             foreach (var section in profile.ResponseContract.StructuredSections)

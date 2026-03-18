@@ -67,14 +67,10 @@ public sealed class HttpFhirBackend : IFhirBackend
         var url = $"{_baseUrl}/{normalized}?_count=200";
         var entries = await FetchAllEntriesAsync(url, ct);
 
-        var results = new List<object>();
-        foreach (var entry in entries)
-        {
-            var mapped = MapResource(entry);
-            if (mapped is not null) results.Add(mapped);
-        }
-
-        return results;
+        return entries
+            .Select(MapResource)
+            .Where(mapped => mapped is not null)
+            .ToList()!;
     }
 
     public async Task<IReadOnlyList<PatientRecord>> SearchPatientsAsync(string? name, string? gender, string? birthYearFrom, string? birthYearTo, string? generalPractitioner, CancellationToken ct = default)
@@ -500,16 +496,13 @@ public sealed class HttpFhirBackend : IFhirBackend
         var name = Str(resource, "name");
         var description = resource["text"]?["div"]?.GetValue<string>() ?? "";
 
-        var memberIds = new List<string>();
-        if (resource["member"] is JsonArray members)
-        {
-            foreach (var m in members)
-            {
-                var reference = m?["entity"]?["reference"]?.GetValue<string>() ?? "";
-                if (!string.IsNullOrEmpty(reference))
-                    memberIds.Add(ExtractId(reference));
-            }
-        }
+        var memberIds = (resource["member"] is JsonArray members
+            ? members
+                .Select(m => m?["entity"]?["reference"]?.GetValue<string>() ?? "")
+                .Where(r => !string.IsNullOrEmpty(r))
+                .Select(ExtractId)
+                .ToList()
+            : new List<string>()) as IReadOnlyList<string>;
 
         return new GroupRecord(id, name, description, memberIds);
     }

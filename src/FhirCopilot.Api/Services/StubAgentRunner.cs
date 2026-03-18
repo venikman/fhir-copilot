@@ -208,12 +208,13 @@ public sealed class StubAgentRunner : IAgentRunner
         foreach (var allergy in allergies)
             builder.AppendLine($"- {allergy.Display} ({allergy.Criticality}) — AllergyIntolerance/{allergy.Id}");
 
-        var citations = new List<Citation> { new($"Patient/{patient.Id}", patient.Name) };
-        citations.AddRange(conditions.Select(condition => new Citation($"Condition/{condition.Id}", condition.Display)));
-        citations.AddRange(medications.Select(medication => new Citation($"MedicationRequest/{medication.Id}", medication.Display)));
-        citations.AddRange(observations.Select(observation => new Citation($"Observation/{observation.Id}", observation.Display)));
-        citations.AddRange(encounters.Select(encounter => new Citation($"Encounter/{encounter.Id}", encounter.TypeDisplay)));
-        citations.AddRange(allergies.Select(allergy => new Citation($"AllergyIntolerance/{allergy.Id}", allergy.Display)));
+        var citations = new Citation[] { new($"Patient/{patient.Id}", patient.Name) }
+            .Concat(conditions.Select(condition => new Citation($"Condition/{condition.Id}", condition.Display)))
+            .Concat(medications.Select(medication => new Citation($"MedicationRequest/{medication.Id}", medication.Display)))
+            .Concat(observations.Select(observation => new Citation($"Observation/{observation.Id}", observation.Display)))
+            .Concat(encounters.Select(encounter => new Citation($"Encounter/{encounter.Id}", encounter.TypeDisplay)))
+            .Concat(allergies.Select(allergy => new Citation($"AllergyIntolerance/{allergy.Id}", allergy.Display)))
+            .ToList();
 
         return new StubExecutionPlan(
             builder.ToString().Trim(),
