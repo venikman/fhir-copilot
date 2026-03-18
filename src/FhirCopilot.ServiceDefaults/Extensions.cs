@@ -39,6 +39,8 @@ public static class Extensions
             .WithMetrics(metrics =>
             {
                 metrics
+                    .AddMeter("FhirCopilot.Agent")
+                    .AddMeter("Microsoft.Agents.AI")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
@@ -49,6 +51,8 @@ public static class Extensions
                     .AddSource(builder.Environment.ApplicationName)
                     .AddSource("FhirCopilot.GenAI")
                     .AddSource("FhirCopilot.Agent")
+                    .AddSource("Microsoft.Extensions.AI")
+                    .AddSource("Microsoft.Agents.AI")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();
             });

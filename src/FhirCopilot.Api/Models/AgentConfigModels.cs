@@ -5,7 +5,6 @@ public sealed class AgentProfile
     public string Name { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public string Purpose { get; init; } = string.Empty;
-    public string PreferredApi { get; init; } = "ChatCompletion";
     public string[] AllowedTools { get; init; } = Array.Empty<string>();
     public string[] Instructions { get; init; } = Array.Empty<string>();
     public string[] DomainContext { get; init; } = Array.Empty<string>();

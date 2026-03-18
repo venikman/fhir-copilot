@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FhirCopilot.Api.Models;
 using FhirCopilot.Api.Services;
 using FsCheck;
@@ -12,7 +13,7 @@ public class RouterPropertyTests
 
     public RouterPropertyTests()
     {
-        _router = new KeywordIntentRouter(new InMemoryProfileStore(), NullLogger<KeywordIntentRouter>.Instance);
+        _router = new KeywordIntentRouter(new ConfigFileProfileStore(), NullLogger<KeywordIntentRouter>.Instance);
     }
 
     [Property]
@@ -54,23 +55,21 @@ public class RouterPropertyTests
     }
 
     /// <summary>
-    /// Minimal IAgentProfileStore that provides the router config
-    /// without needing the full DI container or filesystem.
+    /// Loads router config from the actual router.json config file
+    /// so tests stay in sync with production routing hints.
     /// </summary>
-    private sealed class InMemoryProfileStore : IAgentProfileStore
+    private sealed class ConfigFileProfileStore : IAgentProfileStore
     {
-        private readonly RouterProfile _router = new()
+        private readonly RouterProfile _router;
+
+        public ConfigFileProfileStore()
         {
-            KeywordHints = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["lookup"] = ["show me", "read", "what is", "who manages", "what insurance", "coverage for", "patient/", "encounter/", "condition/"],
-                ["search"] = ["find patients", "search", "encounters for", "patients by", "list encounters", "list patients"],
-                ["analytics"] = ["how many", "count", "compare", "breakdown", "trend", "top", "volume", "ratio", "percentage"],
-                ["clinical"] = ["clinical summary", "summarize", "tell me about", "what happened", "full summary", "plain english"],
-                ["cohort"] = ["without", "who needs", "care gap", "gap", "at risk", "patients with", "patients without", "flag for review"],
-                ["export"] = ["export", "bulk", "download all", "snapshot", "extract"]
-            }
-        };
+            var configDir = Path.Combine(AppContext.BaseDirectory, "config", "agents");
+            var routerPath = Path.Combine(configDir, "router.json");
+            var json = File.ReadAllText(routerPath);
+            _router = JsonSerializer.Deserialize<RouterProfile>(json, JsonDefaults.Serializer)
+                      ?? throw new InvalidDataException("Failed to deserialize router.json");
+        }
 
         public AgentProfile GetAgent(string name) => throw new NotImplementedException();
         public RouterProfile GetRouter() => _router;

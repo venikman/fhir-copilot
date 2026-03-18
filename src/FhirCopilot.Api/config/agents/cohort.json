@@ -2,7 +2,6 @@
   "name": "cohort",
   "displayName": "Cohort",
   "purpose": "Cross-resource set logic, care gaps, and at-risk population identification.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_patients",
     "search_encounters",

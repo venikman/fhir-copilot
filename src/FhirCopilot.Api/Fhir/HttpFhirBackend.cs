@@ -19,12 +19,8 @@ public sealed class HttpFhirBackend : IFhirBackend
 
     public Task<IReadOnlyList<GroupRecord>> GetGroupsAsync(CancellationToken ct = default) => SearchGroupsAsync(null, ct);
     public Task<IReadOnlyList<PatientRecord>> GetPatientsAsync(CancellationToken ct = default) => SearchPatientsAsync(null, null, null, null, null, ct);
-    public Task<IReadOnlyList<EncounterRecord>> GetEncountersAsync(CancellationToken ct = default) => SearchEncountersAsync(null, null, null, null, null, null, null, null, ct);
     public Task<IReadOnlyList<ConditionRecord>> GetConditionsAsync(CancellationToken ct = default) => SearchConditionsAsync(null, null, null, null, ct);
-    public Task<IReadOnlyList<ObservationRecord>> GetObservationsAsync(CancellationToken ct = default) => SearchObservationsAsync(null, null, null, null, null, ct);
     public Task<IReadOnlyList<MedicationRecord>> GetMedicationsAsync(CancellationToken ct = default) => SearchMedicationsAsync(null, null, null, ct);
-    public Task<IReadOnlyList<ProcedureRecord>> GetProceduresAsync(CancellationToken ct = default) => SearchProceduresAsync(null, null, ct);
-    public Task<IReadOnlyList<AllergyRecord>> GetAllergiesAsync(CancellationToken ct = default) => SearchAllergiesAsync(null, ct);
 
     public async Task<IReadOnlyList<GroupRecord>> SearchGroupsAsync(string? query, CancellationToken ct = default)
     {

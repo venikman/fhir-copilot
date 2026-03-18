@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using FhirCopilot.Api.Contracts;
 
 namespace FhirCopilot.Api.Services;
@@ -12,6 +13,14 @@ public interface ICopilotService
 public sealed class CopilotService : ICopilotService
 {
     internal static readonly ActivitySource Telemetry = new("FhirCopilot.Agent");
+    internal static readonly Meter Metrics = new("FhirCopilot.Agent");
+
+    private static readonly Counter<long> RequestCounter =
+        Metrics.CreateCounter<long>("copilot.requests", description: "Number of copilot requests");
+    private static readonly Histogram<double> DurationHistogram =
+        Metrics.CreateHistogram<double>("copilot.request.duration_ms", "ms", "Copilot request duration");
+    private static readonly Counter<long> RoutingCounter =
+        Metrics.CreateCounter<long>("copilot.routing.decisions", description: "Routing decisions made");
 
     private readonly IIntentRouter _router;
     private readonly IAgentProfileStore _profileStore;
@@ -33,6 +42,8 @@ public sealed class CopilotService : ICopilotService
     public async Task<CopilotResponse> RunAsync(CopilotRequest request, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartActivity("copilot.request");
+        var sw = Stopwatch.StartNew();
+        var status = "success";
 
         var threadId = ResolveThreadId(request);
         activity?.SetTag("copilot.thread_id", threadId);
@@ -43,10 +54,32 @@ public sealed class CopilotService : ICopilotService
         activity?.SetTag("copilot.agent", agentType);
         activity?.SetTag("copilot.runner", _runner.GetType().Name);
 
+        RoutingCounter.Add(1, new KeyValuePair<string, object?>("copilot.agent", agentType));
+
         _logger.LogInformation("Routed query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
             agentType, threadId, _runner.GetType().Name);
 
-        return await _runner.RunAsync(profile, request.Query, threadId, cancellationToken);
+        try
+        {
+            return await _runner.RunAsync(profile, request.Query, threadId, cancellationToken);
+        }
+        catch
+        {
+            status = "error";
+            throw;
+        }
+        finally
+        {
+            sw.Stop();
+            var tags = new TagList
+            {
+                { "copilot.agent", agentType },
+                { "copilot.status", status }
+            };
+            RequestCounter.Add(1, tags);
+            DurationHistogram.Record(sw.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("copilot.agent", agentType));
+        }
     }
 
     public async IAsyncEnumerable<CopilotStreamEvent> StreamAsync(
@@ -54,6 +87,7 @@ public sealed class CopilotService : ICopilotService
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartActivity("copilot.stream");
+        var sw = Stopwatch.StartNew();
 
         var threadId = ResolveThreadId(request);
         activity?.SetTag("copilot.thread_id", threadId);
@@ -64,12 +98,31 @@ public sealed class CopilotService : ICopilotService
         activity?.SetTag("copilot.agent", agentType);
         activity?.SetTag("copilot.runner", _runner.GetType().Name);
 
+        RoutingCounter.Add(1, new KeyValuePair<string, object?>("copilot.agent", agentType));
+
         _logger.LogInformation("Streaming query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
             agentType, threadId, _runner.GetType().Name);
 
-        await foreach (var evt in _runner.StreamAsync(profile, request.Query, threadId, cancellationToken))
+        var completed = false;
+        try
         {
-            yield return evt;
+            await foreach (var evt in _runner.StreamAsync(profile, request.Query, threadId, cancellationToken))
+            {
+                yield return evt;
+            }
+            completed = true;
+        }
+        finally
+        {
+            sw.Stop();
+            var tags = new TagList
+            {
+                { "copilot.agent", agentType },
+                { "copilot.status", completed ? "success" : "error" }
+            };
+            RequestCounter.Add(1, tags);
+            DurationHistogram.Record(sw.Elapsed.TotalMilliseconds,
+                new KeyValuePair<string, object?>("copilot.agent", agentType));
         }
     }
 

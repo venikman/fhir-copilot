@@ -5,9 +5,7 @@
   <ItemGroup>
     <PackageVersion Include="FsCheck.Xunit" Version="3.3.2" />
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.0.0-rc4" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc4" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.4.0" />
-    <PackageVersion Include="OpenAI" Version="2.9.1" />
     <PackageVersion Include="Google_GenerativeAI" Version="3.6.3" />
     <PackageVersion Include="Google_GenerativeAI.Microsoft" Version="3.6.3" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0-preview.4.25258.110" />

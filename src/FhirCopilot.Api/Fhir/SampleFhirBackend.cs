@@ -6,12 +6,8 @@ public interface IFhirBackend
 {
     Task<IReadOnlyList<GroupRecord>> GetGroupsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<PatientRecord>> GetPatientsAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<EncounterRecord>> GetEncountersAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ConditionRecord>> GetConditionsAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<ObservationRecord>> GetObservationsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<MedicationRecord>> GetMedicationsAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<ProcedureRecord>> GetProceduresAsync(CancellationToken ct = default);
-    Task<IReadOnlyList<AllergyRecord>> GetAllergiesAsync(CancellationToken ct = default);
 
     Task<IReadOnlyList<GroupRecord>> SearchGroupsAsync(string? query, CancellationToken ct = default);
     Task<object?> ReadResourceAsync(string resourceType, string id, CancellationToken ct = default);
@@ -83,12 +79,8 @@ public sealed class SampleFhirBackend : IFhirBackend
 
     public Task<IReadOnlyList<GroupRecord>> GetGroupsAsync(CancellationToken ct = default) => Task.FromResult(_groups);
     public Task<IReadOnlyList<PatientRecord>> GetPatientsAsync(CancellationToken ct = default) => Task.FromResult(_patients);
-    public Task<IReadOnlyList<EncounterRecord>> GetEncountersAsync(CancellationToken ct = default) => Task.FromResult(_encounters);
     public Task<IReadOnlyList<ConditionRecord>> GetConditionsAsync(CancellationToken ct = default) => Task.FromResult(_conditions);
-    public Task<IReadOnlyList<ObservationRecord>> GetObservationsAsync(CancellationToken ct = default) => Task.FromResult(_observations);
     public Task<IReadOnlyList<MedicationRecord>> GetMedicationsAsync(CancellationToken ct = default) => Task.FromResult(_medications);
-    public Task<IReadOnlyList<ProcedureRecord>> GetProceduresAsync(CancellationToken ct = default) => Task.FromResult(_procedures);
-    public Task<IReadOnlyList<AllergyRecord>> GetAllergiesAsync(CancellationToken ct = default) => Task.FromResult(_allergies);
 
     public Task<IReadOnlyList<GroupRecord>> SearchGroupsAsync(string? query, CancellationToken ct = default)
     {

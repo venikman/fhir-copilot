@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Text;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
@@ -14,6 +15,13 @@ namespace FhirCopilot.Api.Services;
 public sealed class GeminiAgentFrameworkRunner : IAgentRunner
 {
     private const int MaxSessions = 200;
+
+    private static readonly Counter<long> SessionsCreated =
+        CopilotService.Metrics.CreateCounter<long>("copilot.sessions.created", description: "Sessions created");
+    private static readonly Counter<long> SessionsEvicted =
+        CopilotService.Metrics.CreateCounter<long>("copilot.sessions.evicted", description: "Sessions evicted");
+    private static readonly UpDownCounter<long> SessionsActive =
+        CopilotService.Metrics.CreateUpDownCounter<long>("copilot.sessions.active", description: "Currently active sessions");
 
     private readonly ProviderOptions _provider;
     private readonly FhirToolbox _toolbox;
@@ -149,11 +157,18 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
                 foreach (var staleKey in keysToRemove)
                     _sessions.TryRemove(staleKey, out _);
 
+                SessionsEvicted.Add(keysToRemove.Count);
+                SessionsActive.Add(-keysToRemove.Count);
+
                 _logger.LogInformation("Evicted {EvictedCount} session(s), {RemainingCount} remaining", keysToRemove.Count, _sessions.Count);
             }
 
             var created = await agent.CreateSessionAsync();
             _sessions[key] = new SessionEntry(created, DateTime.UtcNow);
+
+            SessionsCreated.Add(1);
+            SessionsActive.Add(1);
+
             _logger.LogDebug("Created new session for thread {ThreadId}, agent {AgentName}", threadId, agentName);
             return created;
         }

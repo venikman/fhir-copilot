@@ -2,7 +2,6 @@
   "name": "lookup",
   "displayName": "Lookup",
   "purpose": "Single-resource reads and reference resolution.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_groups",
     "read_resource",

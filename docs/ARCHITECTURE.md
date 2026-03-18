@@ -7,7 +7,7 @@ HTTP / SSE request
   -> KeywordIntentRouter
   -> Agent profile lookup (config file)
   -> Runner boundary
-      -> OpenAIAgentFrameworkRunner (if configured)
+      -> GeminiAgentFrameworkRunner (if GEMINI_API_KEY set)
       -> StubAgentRunner (default)
   -> Response envelope
 ```
@@ -20,10 +20,7 @@ The original repository architecture is:
 Router -> Specialist Agent -> Explainability -> FHIR tools
 ```
 
-This starter preserves that outer shape, but it moves two things into file-backed seams:
-
-1. runtime agent definitions live in `config/agents/*.json`
-2. workspace/coding-agent policy lives in `.codex/` and `AGENTS.md`
+This starter preserves that outer shape, but moves runtime agent definitions into file-backed seams (`config/agents/*.json`).
 
 ## Deliberate starter simplifications
 

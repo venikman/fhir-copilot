@@ -1,16 +1,14 @@
 # FHIR Copilot Agent Framework Starter
 
-This bundle is a starter repository for rebuilding `venikman/fhir-agents` as a C# / ASP.NET Core project on Microsoft Agent Framework.
+A C# / ASP.NET Core starter for rebuilding `venikman/fhir-agents` on Microsoft Agent Framework with Gemini.
 
 It is intentionally **thin but runnable**:
 
 - a minimal HTTP API with health, sync query, and SSE streaming endpoints
 - externalized runtime agent profiles in `src/FhirCopilot.Api/config/agents/*.json`
 - a deterministic keyword router for first boot
-- an OpenAI-backed Microsoft Agent Framework runner that activates when `OPENAI_API_KEY` is set
+- a Gemini-backed Microsoft Agent Framework runner that activates when `GEMINI_API_KEY` is set
 - a stub runner plus sample FHIR-like data so the project can boot before any model or real FHIR server is wired
-- imported FPF workspace config under `.codex/`
-- imported tradeoff backlog and decision scaffolding under `docs/tradeoffs/`
 
 ## What this starter optimizes for
 
@@ -23,12 +21,10 @@ It is intentionally **thin but runnable**:
 
 ```text
 .
-├── .codex/                         # imported FPF workspace agent config
 ├── AGENTS.md                       # repo-wide orchestration policy
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── DECISIONS.md                # short decision log
-│   ├── bundle-manifest.md          # what was imported vs created
 │   ├── PROD_READINESS.md           # production gaps + completed work
 │   ├── compliance/
 │   │   └── hipaa-logging.md
@@ -36,26 +32,34 @@ It is intentionally **thin but runnable**:
 │   ├── tutorials/
 │   └── http/copilot.http
 ├── src/
-│   └── FhirCopilot.Api/
-│       ├── Contracts/
-│       ├── Fhir/
-│       ├── Models/
-│       ├── Options/
-│       ├── Services/
-│       ├── config/agents/
-│       ├── appsettings.json
-│       └── Program.cs
+│   ├── FhirCopilot.Api/
+│   │   ├── Contracts/
+│   │   ├── Fhir/
+│   │   ├── Models/
+│   │   ├── Options/
+│   │   ├── Services/
+│   │   ├── config/agents/
+│   │   ├── appsettings.json
+│   │   └── Program.cs
+│   ├── FhirCopilot.AppHost/        # Aspire dev dashboard
+│   └── FhirCopilot.ServiceDefaults/ # OTEL, health checks, resilience
+├── tests/
+│   └── FhirCopilot.Api.Tests/
 └── .env.example
 ```
 
 ## First boot
 
 ```bash
-dotnet restore src/FhirCopilot.Api/FhirCopilot.Api.csproj
-dotnet run --project src/FhirCopilot.Api/FhirCopilot.Api.csproj
-```
+# Stub mode (no API key needed)
+dotnet run --project src/FhirCopilot.Api
 
-Default mode is `Stub`, so no model key is required.
+# Dev with Aspire dashboard (traces, metrics, logs)
+dotnet run --project src/FhirCopilot.AppHost
+
+# Run tests
+dotnet test
+```
 
 Health check:
 
@@ -79,23 +83,15 @@ curl -N "http://localhost:5075/api/copilot/stream?query=Clinical%20summary%20for
 
 ## Enable real Agent Framework calls
 
-1. Set `Provider__Mode=OpenAI`
-2. Set `OPENAI_API_KEY`
-3. Optionally change `Provider__OpenAIChatModel` and `Provider__OpenAIResponsesModel`
+Create a `.env` file at the repo root (see `.env.example`):
 
-Example:
-
-```bash
-export Provider__Mode=OpenAI
-export OPENAI_API_KEY=sk-...
-dotnet run --project src/FhirCopilot.Api/FhirCopilot.Api.csproj
+```env
+Provider__Mode=Gemini
+GEMINI_API_KEY=your-key-here
+Provider__GeminiModel=gemini-3.1-flash
 ```
 
-The starter uses:
-- `ChatCompletion` agents for lookup/search/analytics/clinical/cohort
-- `Responses` agent for export
-- function tools created from `FhirToolbox` methods
-- `AgentSession` per `(threadId, agent)` pair
+The runner uses the Google GenerativeAI native SDK with Microsoft Agent Framework's `AIAgent` abstraction, function tools from `FhirToolbox`, and `AgentSession` per `(threadId, agent)` pair.
 
 ## Immediate next steps
 
@@ -109,4 +105,3 @@ The starter uses:
 
 - Package versions are pinned centrally in `Directory.Packages.props`.
 - Microsoft Agent Framework packages are still prerelease; isolate framework-specific code behind the runner boundary before production rollout.
-- The starter keeps the old six-agent mental model because it is the fastest path to a usable parity slice. The tradeoff backlog already captures where to collapse that into workflow-first orchestration later.

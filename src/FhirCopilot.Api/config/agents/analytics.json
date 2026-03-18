@@ -2,7 +2,6 @@
   "name": "analytics",
   "displayName": "Analytics",
   "purpose": "Counts, comparisons, simple ratios, and rankings over FHIR-derived results.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_patients",
     "search_encounters",

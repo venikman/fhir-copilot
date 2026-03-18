@@ -2,7 +2,6 @@
   "name": "clinical",
   "displayName": "Clinical",
   "purpose": "Multi-resource patient summaries and plain-English encounter narratives.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_groups",
     "read_resource",

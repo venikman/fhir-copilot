@@ -2,7 +2,6 @@
   "name": "search",
   "displayName": "Search",
   "purpose": "Single-resource filtering and search parameter translation.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_patients",
     "search_encounters",
