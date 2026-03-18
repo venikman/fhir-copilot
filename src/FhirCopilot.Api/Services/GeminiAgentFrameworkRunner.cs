@@ -24,10 +24,7 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
 
-    private sealed record SessionEntry(AgentSession Session, DateTime LastUsed)
-    {
-        public DateTime LastUsed { get; set; } = LastUsed;
-    }
+    private sealed record SessionEntry(AgentSession Session, DateTime LastUsed);
 
     public GeminiAgentFrameworkRunner(IOptions<ProviderOptions> providerOptions, FhirToolbox toolbox, ILogger<GeminiAgentFrameworkRunner> logger)
     {
@@ -139,7 +136,7 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
         {
             if (_sessions.TryGetValue(key, out var existing))
             {
-                existing.LastUsed = DateTime.UtcNow;
+                _sessions[key] = existing with { LastUsed = DateTime.UtcNow };
                 return existing.Session;
             }
 

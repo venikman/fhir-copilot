@@ -2,17 +2,13 @@ using System.ComponentModel;
 using System.Data;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace FhirCopilot.Api.Fhir;
 
-public sealed class FhirToolbox
+public sealed class FhirToolbox(IFhirBackend backend)
 {
-    private readonly IFhirBackend _backend;
-
-    public FhirToolbox(IFhirBackend backend)
-    {
-        _backend = backend;
-    }
+    private readonly IFhirBackend _backend = backend;
 
     [Description("Search attribution groups by name or identifier.")]
     public async Task<string> SearchGroups([Description("Group name or identifier fragment.")] string? query = null)
@@ -99,9 +95,15 @@ public sealed class FhirToolbox
     public async Task<string> SearchAllergies([Description("Optional patient id.")] string? patientId = null)
         => JsonSerializer.Serialize(await _backend.SearchAllergiesAsync(patientId), Services.JsonDefaults.Serializer);
 
+    private static readonly Regex SafeExpressionPattern = new(
+        @"^[\d\s\+\-\*\/\.\(\)\%]+$", RegexOptions.Compiled);
+
     [Description("Evaluate a simple arithmetic expression for ratios, percentages, or counts.")]
     public string Calculator([Description("Arithmetic expression such as '(3 / 10) * 100'.")] string expression)
     {
+        if (!SafeExpressionPattern.IsMatch(expression))
+            return "Error: expression contains invalid characters. Only digits, operators (+−*/%), parentheses, and whitespace are allowed.";
+
         var table = new DataTable();
         var result = table.Compute(expression, null);
         return Convert.ToString(result, CultureInfo.InvariantCulture) ?? string.Empty;

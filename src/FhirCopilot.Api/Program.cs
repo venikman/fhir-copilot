@@ -77,31 +77,7 @@ app.MapPost("/api/copilot/stream", async (
     ICopilotService service,
     CancellationToken cancellationToken) =>
 {
-    httpContext.Response.StatusCode = StatusCodes.Status200OK;
-    httpContext.Response.Headers.ContentType = "text/event-stream";
-    httpContext.Response.Headers.CacheControl = "no-cache";
-    httpContext.Response.Headers["X-Accel-Buffering"] = "no";
-
-    try
-    {
-        await foreach (var evt in service.StreamAsync(request, cancellationToken))
-        {
-            var payload = JsonSerializer.Serialize(evt, FhirCopilot.Api.Services.JsonDefaults.Serializer);
-            await httpContext.Response.WriteAsync($"event: {evt.Type}\ndata: {payload}\n\n", cancellationToken);
-            await httpContext.Response.Body.FlushAsync(cancellationToken);
-        }
-    }
-    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-    {
-        // Client disconnected — no action needed.
-    }
-    catch (Exception ex)
-    {
-        var errorEvt = CopilotStreamEvent.Error(ex.Message);
-        var errorPayload = JsonSerializer.Serialize(errorEvt, FhirCopilot.Api.Services.JsonDefaults.Serializer);
-        await httpContext.Response.WriteAsync($"event: error\ndata: {errorPayload}\n\n", CancellationToken.None);
-        await httpContext.Response.Body.FlushAsync(CancellationToken.None);
-    }
+    await SseWriter.WriteAsync(httpContext, service.StreamAsync(request, cancellationToken), cancellationToken);
 });
 
 app.Run();
