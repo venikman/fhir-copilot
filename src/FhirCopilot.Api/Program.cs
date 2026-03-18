@@ -34,8 +34,16 @@ else
 }
 
 builder.Services.AddSingleton<FhirToolbox>();
-builder.Services.AddSingleton<StubAgentRunner>();
-builder.Services.AddSingleton<GeminiAgentFrameworkRunner>();
+
+if (providerConfig.IsGeminiMode)
+{
+    builder.Services.AddSingleton<IAgentRunner, GeminiAgentFrameworkRunner>();
+}
+else
+{
+    builder.Services.AddSingleton<IAgentRunner, StubAgentRunner>();
+}
+
 builder.Services.AddSingleton<ICopilotService, CopilotService>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {

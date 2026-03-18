@@ -6,7 +6,7 @@ using FhirCopilot.Api.Models;
 
 namespace FhirCopilot.Api.Services;
 
-public sealed class StubAgentRunner
+public sealed class StubAgentRunner : IAgentRunner
 {
     private readonly IFhirBackend _backend;
 

@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using FhirCopilot.Api.Contracts;
-using FhirCopilot.Api.Options;
-using Microsoft.Extensions.Options;
 
 namespace FhirCopilot.Api.Services;
 
@@ -17,24 +15,18 @@ public sealed class CopilotService : ICopilotService
 
     private readonly IIntentRouter _router;
     private readonly IAgentProfileStore _profileStore;
-    private readonly StubAgentRunner _stubRunner;
-    private readonly GeminiAgentFrameworkRunner _geminiRunner;
-    private readonly RuntimeOptions _runtime;
+    private readonly IAgentRunner _runner;
     private readonly ILogger<CopilotService> _logger;
 
     public CopilotService(
         IIntentRouter router,
         IAgentProfileStore profileStore,
-        StubAgentRunner stubRunner,
-        GeminiAgentFrameworkRunner geminiRunner,
-        IOptions<RuntimeOptions> runtimeOptions,
+        IAgentRunner runner,
         ILogger<CopilotService> logger)
     {
         _router = router;
         _profileStore = profileStore;
-        _stubRunner = stubRunner;
-        _geminiRunner = geminiRunner;
-        _runtime = runtimeOptions.Value;
+        _runner = runner;
         _logger = logger;
     }
 
@@ -47,25 +39,14 @@ public sealed class CopilotService : ICopilotService
 
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
-        var runner = _geminiRunner.IsConfigured ? "Gemini" : "Stub";
 
         activity?.SetTag("copilot.agent", agentType);
-        activity?.SetTag("copilot.runner", runner);
+        activity?.SetTag("copilot.runner", _runner.GetType().Name);
 
         _logger.LogInformation("Routed query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
-            agentType, threadId, runner);
+            agentType, threadId, _runner.GetType().Name);
 
-        if (_geminiRunner.IsConfigured)
-        {
-            return await _geminiRunner.RunAsync(profile, request.Query, threadId, cancellationToken);
-        }
-
-        if (_runtime.UseStubWhenProviderMissing)
-        {
-            return await _stubRunner.RunAsync(profile, request.Query, threadId, cancellationToken);
-        }
-
-        throw new InvalidOperationException("No provider is configured and stub mode is disabled.");
+        return await _runner.RunAsync(profile, request.Query, threadId, cancellationToken);
     }
 
     public async IAsyncEnumerable<CopilotStreamEvent> StreamAsync(
@@ -79,35 +60,17 @@ public sealed class CopilotService : ICopilotService
 
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
-        var runner = _geminiRunner.IsConfigured ? "Gemini" : "Stub";
 
         activity?.SetTag("copilot.agent", agentType);
-        activity?.SetTag("copilot.runner", runner);
+        activity?.SetTag("copilot.runner", _runner.GetType().Name);
 
         _logger.LogInformation("Streaming query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
-            agentType, threadId, runner);
+            agentType, threadId, _runner.GetType().Name);
 
-        if (_geminiRunner.IsConfigured)
+        await foreach (var evt in _runner.StreamAsync(profile, request.Query, threadId, cancellationToken))
         {
-            await foreach (var evt in _geminiRunner.StreamAsync(profile, request.Query, threadId, cancellationToken))
-            {
-                yield return evt;
-            }
-
-            yield break;
+            yield return evt;
         }
-
-        if (_runtime.UseStubWhenProviderMissing)
-        {
-            await foreach (var evt in _stubRunner.StreamAsync(profile, request.Query, threadId, cancellationToken))
-            {
-                yield return evt;
-            }
-
-            yield break;
-        }
-
-        yield return CopilotStreamEvent.Error("No provider is configured and stub mode is disabled.");
     }
 
     private static string ResolveThreadId(CopilotRequest request)

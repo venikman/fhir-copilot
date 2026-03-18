@@ -12,7 +12,7 @@ using OpenAI;
 
 namespace FhirCopilot.Api.Services;
 
-public sealed class GeminiAgentFrameworkRunner
+public sealed class GeminiAgentFrameworkRunner : IAgentRunner
 {
     private static readonly Uri GeminiOpenAIEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
     private const int MaxSessions = 200;
