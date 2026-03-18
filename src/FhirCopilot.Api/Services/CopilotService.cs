@@ -17,19 +17,22 @@ public sealed class CopilotService : ICopilotService
     private readonly StubAgentRunner _stubRunner;
     private readonly GeminiAgentFrameworkRunner _geminiRunner;
     private readonly RuntimeOptions _runtime;
+    private readonly ILogger<CopilotService> _logger;
 
     public CopilotService(
         IIntentRouter router,
         IAgentProfileStore profileStore,
         StubAgentRunner stubRunner,
         GeminiAgentFrameworkRunner geminiRunner,
-        IOptions<RuntimeOptions> runtimeOptions)
+        IOptions<RuntimeOptions> runtimeOptions,
+        ILogger<CopilotService> logger)
     {
         _router = router;
         _profileStore = profileStore;
         _stubRunner = stubRunner;
         _geminiRunner = geminiRunner;
         _runtime = runtimeOptions.Value;
+        _logger = logger;
     }
 
     public async Task<CopilotResponse> RunAsync(CopilotRequest request, CancellationToken cancellationToken)
@@ -37,6 +40,9 @@ public sealed class CopilotService : ICopilotService
         var threadId = ResolveThreadId(request);
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
+
+        _logger.LogInformation("Routed query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
+            agentType, threadId, _geminiRunner.IsConfigured ? "Gemini" : "Stub");
 
         if (_geminiRunner.IsConfigured)
         {
@@ -58,6 +64,9 @@ public sealed class CopilotService : ICopilotService
         var threadId = ResolveThreadId(request);
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
+
+        _logger.LogInformation("Streaming query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
+            agentType, threadId, _geminiRunner.IsConfigured ? "Gemini" : "Stub");
 
         if (_geminiRunner.IsConfigured)
         {

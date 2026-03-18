@@ -1,0 +1,21 @@
+﻿{
+  "answer": "Alice Carter is covered by Aetna PPO. Evidence: Patient/patient-0001.",
+  "citations": [
+    {
+      "resourceId": "Patient/patient-0001",
+      "label": "Alice Carter"
+    }
+  ],
+  "reasoning": [
+    "Selected lookup agent.",
+    "Resolved patient from query to Patient/patient-0001.",
+    "Returned coverage from patient record."
+  ],
+  "toolsUsed": [
+    "read_resource"
+  ],
+  "agentUsed": "lookup",
+  "confidence": "high",
+  "threadId": "snap-lookup",
+  "isStub": true
+}

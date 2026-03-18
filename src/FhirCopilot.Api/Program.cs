@@ -22,7 +22,8 @@ if (providerConfig.HasFhirBaseUrl)
     builder.Services.AddSingleton<IFhirBackend>(sp =>
     {
         var factory = sp.GetRequiredService<IHttpClientFactory>();
-        return new HttpFhirBackend(factory, providerConfig.FhirBaseUrl!);
+        var logger = sp.GetRequiredService<ILogger<HttpFhirBackend>>();
+        return new HttpFhirBackend(factory, providerConfig.FhirBaseUrl!, logger);
     });
 }
 else
@@ -43,6 +44,11 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 var app = builder.Build();
+
+// Validate agent tool configs at startup to catch typos early
+ToolRegistry.ValidateProfiles(
+    app.Services.GetRequiredService<IAgentProfileStore>(),
+    app.Services.GetRequiredService<ILogger<Program>>());
 
 app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is running. See /health or /api/copilot."));
 app.MapHealthChecks("/health");
@@ -90,3 +96,6 @@ app.MapPost("/api/copilot/stream", async (
 });
 
 app.Run();
+
+// Make the implicit Program class visible to WebApplicationFactory in integration tests.
+public partial class Program { }

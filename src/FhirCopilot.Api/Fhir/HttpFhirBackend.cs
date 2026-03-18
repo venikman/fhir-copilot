@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using FhirCopilot.Api.Models;
+using Microsoft.Extensions.Logging;
 
 namespace FhirCopilot.Api.Fhir;
 
@@ -7,11 +8,13 @@ public sealed class HttpFhirBackend : IFhirBackend
 {
     private readonly IHttpClientFactory _httpFactory;
     private readonly string _baseUrl;
+    private readonly ILogger<HttpFhirBackend> _logger;
 
-    public HttpFhirBackend(IHttpClientFactory httpFactory, string fhirBaseUrl)
+    public HttpFhirBackend(IHttpClientFactory httpFactory, string fhirBaseUrl, ILogger<HttpFhirBackend> logger)
     {
         _httpFactory = httpFactory;
         _baseUrl = fhirBaseUrl.TrimEnd('/');
+        _logger = logger;
     }
 
     public Task<IReadOnlyList<GroupRecord>> GetGroupsAsync(CancellationToken ct = default) => SearchGroupsAsync(null, ct);
@@ -44,7 +47,10 @@ public sealed class HttpFhirBackend : IFhirBackend
             var response = await http.GetAsync(url, ct);
 
             if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("FHIR read {ResourceType}/{Id} returned {StatusCode}", normalized, id, (int)response.StatusCode);
                 return null;
+            }
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var node = JsonNode.Parse(json);
@@ -52,8 +58,9 @@ public sealed class HttpFhirBackend : IFhirBackend
 
             return MapResource(node);
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            _logger.LogWarning(ex, "FHIR read {ResourceType}/{Id} failed", normalized, id);
             return null;
         }
     }
@@ -208,6 +215,8 @@ public sealed class HttpFhirBackend : IFhirBackend
 
         try
         {
+            _logger.LogInformation("Starting bulk export for Group/{GroupId}", groupId);
+
             var http = CreateClient();
             var request = new HttpRequestMessage(HttpMethod.Get, kickOffUrl);
             request.Headers.Add("Accept", "application/fhir+json");
@@ -222,10 +231,12 @@ public sealed class HttpFhirBackend : IFhirBackend
                 return await PollExportStatusAsync(statusUrl, groupId, ct);
             }
 
+            _logger.LogWarning("Bulk export kick-off for Group/{GroupId} returned {StatusCode}", groupId, (int)response.StatusCode);
             return new ExportSummary(groupId, "error", new Dictionary<string, int>());
         }
-        catch (HttpRequestException)
+        catch (HttpRequestException ex)
         {
+            _logger.LogWarning(ex, "Bulk export for Group/{GroupId} failed", groupId);
             return new ExportSummary(groupId, "error", new Dictionary<string, int>());
         }
     }
@@ -288,7 +299,12 @@ public sealed class HttpFhirBackend : IFhirBackend
         for (var page = 0; page < maxPages && nextUrl is not null; page++)
         {
             var response = await http.GetAsync(nextUrl, ct);
-            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("FHIR search page {Page} returned {StatusCode} for {Url}", page, (int)response.StatusCode, nextUrl);
+                break;
+            }
 
             var json = await response.Content.ReadAsStringAsync(ct);
             var root = JsonNode.Parse(json);
@@ -306,6 +322,9 @@ public sealed class HttpFhirBackend : IFhirBackend
 
             nextUrl = FindNextLink(root);
         }
+
+        if (allEntries.Count > 0)
+            _logger.LogDebug("Fetched {Count} entries from FHIR search", allEntries.Count);
 
         return allEntries;
     }

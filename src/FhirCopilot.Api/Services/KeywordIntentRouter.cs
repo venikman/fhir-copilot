@@ -11,10 +11,12 @@ public interface IIntentRouter
 public sealed class KeywordIntentRouter : IIntentRouter
 {
     private readonly RouterProfile _router;
+    private readonly ILogger<KeywordIntentRouter> _logger;
 
-    public KeywordIntentRouter(IAgentProfileStore profileStore)
+    public KeywordIntentRouter(IAgentProfileStore profileStore, ILogger<KeywordIntentRouter> logger)
     {
         _router = profileStore.GetRouter();
+        _logger = logger;
     }
 
     public Task<string> RouteAsync(string query, CancellationToken cancellationToken)
@@ -58,6 +60,7 @@ public sealed class KeywordIntentRouter : IIntentRouter
 
         var best = scores.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key, StringComparer.Ordinal).FirstOrDefault();
         var selected = best.Value > 0 ? best.Key : _router.FallbackAgent;
+        _logger.LogDebug("Router scores: {Scores}, selected: {Selected}", scores.Where(s => s.Value > 0).ToDictionary(s => s.Key, s => s.Value), selected);
         return Task.FromResult(selected);
     }
 }

@@ -1,0 +1,22 @@
+﻿{
+  "answer": "Started and completed export for Group/group-2026-northwind (Northwind ACO 2026). Status: completed. Resource counts: Patient: 3, Encounter: 3, Condition: 4, Observation: 3, MedicationRequest: 2, Procedure: 2, AllergyIntolerance: 1.",
+  "citations": [
+    {
+      "resourceId": "Group/group-2026-northwind",
+      "label": "Northwind ACO 2026"
+    }
+  ],
+  "reasoning": [
+    "Selected export agent.",
+    "Resolved export group to Group/group-2026-northwind.",
+    "Returned export summary."
+  ],
+  "toolsUsed": [
+    "search_groups",
+    "bulk_export"
+  ],
+  "agentUsed": "export",
+  "confidence": "high",
+  "threadId": "snap-export",
+  "isStub": true
+}

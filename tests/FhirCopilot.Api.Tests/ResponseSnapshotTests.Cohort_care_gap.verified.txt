@@ -1,0 +1,24 @@
+﻿{
+  "answer": "Diabetic patients without metformin: Carla Gomez (Patient/patient-0003).",
+  "citations": [
+    {
+      "resourceId": "Patient/patient-0003",
+      "label": "Carla Gomez"
+    }
+  ],
+  "reasoning": [
+    "Selected cohort agent.",
+    "Built the diabetes patient set from Condition records.",
+    "Built the metformin patient set from MedicationRequest records.",
+    "Computed the set difference."
+  ],
+  "toolsUsed": [
+    "search_conditions",
+    "search_medications",
+    "calculator"
+  ],
+  "agentUsed": "cohort",
+  "confidence": "high",
+  "threadId": "snap-cohort",
+  "isStub": true
+}

@@ -19,6 +19,7 @@ public sealed class GeminiAgentFrameworkRunner
 
     private readonly ProviderOptions _provider;
     private readonly FhirToolbox _toolbox;
+    private readonly ILogger<GeminiAgentFrameworkRunner> _logger;
     private readonly ConcurrentDictionary<string, AIAgent> _agents = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _sessionLock = new(1, 1);
@@ -28,16 +29,19 @@ public sealed class GeminiAgentFrameworkRunner
         public DateTime LastUsed { get; set; } = LastUsed;
     }
 
-    public GeminiAgentFrameworkRunner(IOptions<ProviderOptions> providerOptions, FhirToolbox toolbox)
+    public GeminiAgentFrameworkRunner(IOptions<ProviderOptions> providerOptions, FhirToolbox toolbox, ILogger<GeminiAgentFrameworkRunner> logger)
     {
         _provider = providerOptions.Value;
         _toolbox = toolbox;
+        _logger = logger;
     }
 
     public bool IsConfigured => _provider.IsGeminiMode;
 
     public async Task<CopilotResponse> RunAsync(AgentProfile profile, string query, string threadId, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("RunAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
+
         var agent = GetOrCreateAgent(profile);
         var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
 
@@ -52,6 +56,7 @@ public sealed class GeminiAgentFrameworkRunner
         }
 
         var answer = answerBuilder.ToString().Trim();
+        _logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, answer length {AnswerLength}", profile.Name, threadId, answer.Length);
         return BuildResponse(answer, profile, threadId);
     }
 
@@ -63,6 +68,8 @@ public sealed class GeminiAgentFrameworkRunner
     {
         var agent = GetOrCreateAgent(profile);
         var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+
+        _logger.LogInformation("StreamAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
 
         yield return CopilotStreamEvent.Meta(profile.Name, threadId, isStub: false);
 
@@ -78,6 +85,7 @@ public sealed class GeminiAgentFrameworkRunner
         }
 
         var answer = answerBuilder.ToString().Trim();
+        _logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, answer length {AnswerLength}", profile.Name, threadId, answer.Length);
         yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));
     }
 
@@ -94,7 +102,7 @@ public sealed class GeminiAgentFrameworkRunner
             ],
             Array.Empty<string>(),
             profile.Name,
-            citations.Count > 0 ? "medium" : "low",
+            Confidence: "unverified",
             threadId,
             IsStub: false);
     }
@@ -120,17 +128,12 @@ public sealed class GeminiAgentFrameworkRunner
     {
         var key = $"{threadId}::{agentName}";
 
-        if (_sessions.TryGetValue(key, out var existing))
-        {
-            existing.LastUsed = DateTime.UtcNow;
-            return existing.Session;
-        }
-
+        // All session access goes through the lock to prevent races between
+        // the optimistic read, LRU eviction, and LastUsed updates.
         await _sessionLock.WaitAsync();
         try
         {
-            // Double-check after acquiring lock
-            if (_sessions.TryGetValue(key, out existing))
+            if (_sessions.TryGetValue(key, out var existing))
             {
                 existing.LastUsed = DateTime.UtcNow;
                 return existing.Session;
@@ -139,17 +142,22 @@ public sealed class GeminiAgentFrameworkRunner
             // Evict least-recently-used sessions to reclaim capacity
             if (_sessions.Count >= MaxSessions)
             {
+                var evictCount = Math.Min(_sessions.Count / 10, _sessions.Count - MaxSessions + 1);
+                evictCount = Math.Max(evictCount, 1);
                 var keysToRemove = _sessions
                     .OrderBy(kvp => kvp.Value.LastUsed)
-                    .Take(_sessions.Count / 2)
+                    .Take(evictCount)
                     .Select(kvp => kvp.Key)
                     .ToList();
                 foreach (var staleKey in keysToRemove)
                     _sessions.TryRemove(staleKey, out _);
+
+                _logger.LogInformation("Evicted {EvictedCount} session(s), {RemainingCount} remaining", keysToRemove.Count, _sessions.Count);
             }
 
             var created = await agent.CreateSessionAsync();
             _sessions[key] = new SessionEntry(created, DateTime.UtcNow);
+            _logger.LogDebug("Created new session for thread {ThreadId}, agent {AgentName}", threadId, agentName);
             return created;
         }
         finally
