@@ -18,6 +18,10 @@ This document captures known engineering gaps that are acceptable in the current
 | 10 | Config cleanup | `d2bfff4` | Gemini default, .env loading, removed UseStubWhenProviderMissing |
 | 11 | Native Gemini SDK | `3292d7a` | Replaced OpenAI compat layer with Google_GenerativeAI native SDK |
 | 12 | Custom metrics | — | `FhirCopilot.Agent` meter: request counter, duration histogram, routing decisions, session lifecycle |
+| 13 | Error handling | `d3c1dd9` | Structured error responses on `/api/copilot` (502/504/500), LogError in CopilotService |
+| 14 | Model fallback | `229d355` | Gemini 429 fallback chain: flash → flash-lite → pro, configurable via `GeminiModels` |
+| 15 | Logging enrichment | `8e185b9` | Trace-enriched console formatter with trace/span IDs for local dev |
+| 16 | AppHost FHIR resource | `8b81b46` | FHIR backend as Aspire parameter resource with env var injection |
 
 ## How to Run
 
@@ -65,11 +69,11 @@ These were fixed because they teach good engineering habits regardless of contex
 ## Next Steps
 
 ### High priority
-1. **Error handling for Gemini failures** — CopilotService should catch runner exceptions and return structured error responses instead of 500s with stack traces
-2. **Structured logging enrichment** — Add trace/span IDs to log entries so logs correlate with traces in the dashboard
+1. ~~**Error handling for Gemini failures**~~ — Done (step 13)
+2. ~~**Structured logging enrichment**~~ — Done (step 15)
 
 ### Medium priority
-4. **Aspire AppHost enhancements** — Add FHIR backend as an external resource in the dashboard, configure environment variables for the Api project
+4. ~~**Aspire AppHost enhancements**~~ — Done (step 16)
 5. **Integration test with real Gemini** — Optional test category that hits the real API (skipped in CI without GEMINI_API_KEY)
 6. **Response caching** — Cache FHIR backend responses to reduce latency on repeated tool calls within a session
 
