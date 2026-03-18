@@ -35,3 +35,7 @@ public sealed record CopilotStreamEvent(
     public static CopilotStreamEvent Error(string message)
         => new("error", Message: message);
 }
+
+public sealed record CopilotError(string Type, string Message);
+
+public sealed record CopilotErrorResponse(CopilotError Error);
