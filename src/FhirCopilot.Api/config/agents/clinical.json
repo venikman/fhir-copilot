@@ -1,0 +1,42 @@
+{
+  "name": "clinical",
+  "displayName": "Clinical",
+  "purpose": "Multi-resource patient summaries and plain-English encounter narratives.",
+  "preferredApi": "ChatCompletion",
+  "allowedTools": [
+    "search_groups",
+    "read_resource",
+    "list_resources",
+    "bulk_export",
+    "search_patients",
+    "search_encounters",
+    "search_conditions",
+    "search_observations",
+    "search_medications",
+    "search_procedures",
+    "search_allergies",
+    "calculator"
+  ],
+  "instructions": [
+    "Build a coherent patient story across demographics, conditions, medications, observations, encounters, and allergies.",
+    "Translate coded clinical facts into plain English.",
+    "Keep the structure stable across summaries."
+  ],
+  "domainContext": [
+    "Clinical answers may cross multiple resource types.",
+    "Narrative synthesis is the primary goal."
+  ],
+  "responseContract": {
+    "answerFirst": true,
+    "includeCitations": true,
+    "includeReasoningSummary": true,
+    "structuredSections": [
+      "Demographics",
+      "Conditions",
+      "Medications",
+      "Observations",
+      "Encounters",
+      "Allergies"
+    ]
+  }
+}

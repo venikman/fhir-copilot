@@ -1,0 +1,61 @@
+{
+  "name": "router",
+  "fallbackAgent": "clinical",
+  "keywordHints": {
+    "lookup": [
+      "show me",
+      "read",
+      "what is",
+      "who manages",
+      "what insurance",
+      "coverage for",
+      "patient/",
+      "encounter/",
+      "condition/"
+    ],
+    "search": [
+      "find patients",
+      "search",
+      "encounters for",
+      "patients by",
+      "list encounters",
+      "list patients"
+    ],
+    "analytics": [
+      "how many",
+      "count",
+      "compare",
+      "breakdown",
+      "trend",
+      "top",
+      "volume",
+      "ratio",
+      "percentage"
+    ],
+    "clinical": [
+      "clinical summary",
+      "summarize",
+      "tell me about",
+      "what happened",
+      "full summary",
+      "plain english"
+    ],
+    "cohort": [
+      "without",
+      "who needs",
+      "care gap",
+      "gap",
+      "at risk",
+      "patients with",
+      "patients without",
+      "flag for review"
+    ],
+    "export": [
+      "export",
+      "bulk",
+      "download all",
+      "snapshot",
+      "extract"
+    ]
+  }
+}

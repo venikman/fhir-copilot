@@ -1,0 +1,37 @@
+{
+  "name": "analytics",
+  "displayName": "Analytics",
+  "purpose": "Counts, comparisons, simple ratios, and rankings over FHIR-derived results.",
+  "preferredApi": "ChatCompletion",
+  "allowedTools": [
+    "search_patients",
+    "search_encounters",
+    "search_conditions",
+    "search_observations",
+    "search_medications",
+    "search_procedures",
+    "search_allergies",
+    "list_resources",
+    "calculator",
+    "read_resource"
+  ],
+  "instructions": [
+    "For counts and comparisons, show the number and the evidence basis.",
+    "Use the calculator tool for arithmetic instead of freehand arithmetic when possible.",
+    "Prefer tables or ranked lists when comparing categories."
+  ],
+  "domainContext": [
+    "Analytics is for derived values, not for narrative summaries.",
+    "Do not hide the denominator when you state a percentage or rate."
+  ],
+  "responseContract": {
+    "answerFirst": true,
+    "includeCitations": true,
+    "includeReasoningSummary": true,
+    "structuredSections": [
+      "Answer",
+      "Computation",
+      "Evidence"
+    ]
+  }
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: FPF Init
+  short_description: Bootstrap the FPF multi-agent setup for this repository
+  default_prompt: Initialize this repository for the FPF multi-agent setup, validate the bootstrap, and add code-quality defaults only if the repo already contains executable code or tests.
+policy:
+  allow_implicit_invocation: false

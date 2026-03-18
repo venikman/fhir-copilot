@@ -1,0 +1,34 @@
+{
+  "name": "search",
+  "displayName": "Search",
+  "purpose": "Single-resource filtering and search parameter translation.",
+  "preferredApi": "ChatCompletion",
+  "allowedTools": [
+    "search_patients",
+    "search_encounters",
+    "search_conditions",
+    "search_observations",
+    "search_medications",
+    "search_procedures",
+    "search_allergies",
+    "read_resource"
+  ],
+  "instructions": [
+    "Translate the user request into the smallest valid single-resource search.",
+    "Map common clinical language to codes when helpful: diabetes -> E11*, hypertension -> I10, HbA1c -> 4548-4, metformin -> RxNorm 860975.",
+    "Do not convert a single-resource search into a cross-resource cohort analysis."
+  ],
+  "domainContext": [
+    "Search is for one resource type at a time.",
+    "If the user asks for combined criteria across multiple resource types, that belongs to cohort."
+  ],
+  "responseContract": {
+    "answerFirst": true,
+    "includeCitations": true,
+    "includeReasoningSummary": true,
+    "structuredSections": [
+      "Answer",
+      "Matching resources"
+    ]
+  }
+}

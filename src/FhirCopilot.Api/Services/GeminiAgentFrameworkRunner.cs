@@ -1,0 +1,160 @@
+using System.ClientModel;
+using System.Collections.Concurrent;
+using System.Text;
+using FhirCopilot.Api.Contracts;
+using FhirCopilot.Api.Fhir;
+using FhirCopilot.Api.Models;
+using FhirCopilot.Api.Options;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
+using OpenAI;
+
+namespace FhirCopilot.Api.Services;
+
+public sealed class GeminiAgentFrameworkRunner
+{
+    private static readonly Uri GeminiOpenAIEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
+    private const int MaxSessions = 200;
+
+    private readonly ProviderOptions _provider;
+    private readonly FhirToolbox _toolbox;
+    private readonly ConcurrentDictionary<string, AIAgent> _agents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, SessionEntry> _sessions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
+
+    private sealed record SessionEntry(AgentSession Session, DateTime LastUsed)
+    {
+        public DateTime LastUsed { get; set; } = LastUsed;
+    }
+
+    public GeminiAgentFrameworkRunner(IOptions<ProviderOptions> providerOptions, FhirToolbox toolbox)
+    {
+        _provider = providerOptions.Value;
+        _toolbox = toolbox;
+    }
+
+    public bool IsConfigured => _provider.IsGeminiMode;
+
+    public async Task<CopilotResponse> RunAsync(AgentProfile profile, string query, string threadId, CancellationToken cancellationToken)
+    {
+        var agent = GetOrCreateAgent(profile);
+        var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+
+        var answerBuilder = new StringBuilder();
+
+        await foreach (var update in agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken))
+        {
+            if (!string.IsNullOrWhiteSpace(update.Text))
+            {
+                answerBuilder.Append(update.Text);
+            }
+        }
+
+        var answer = answerBuilder.ToString().Trim();
+        return BuildResponse(answer, profile, threadId);
+    }
+
+    public async IAsyncEnumerable<CopilotStreamEvent> StreamAsync(
+        AgentProfile profile,
+        string query,
+        string threadId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var agent = GetOrCreateAgent(profile);
+        var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+
+        yield return CopilotStreamEvent.Meta(profile.Name, threadId, isStub: false);
+
+        var answerBuilder = new StringBuilder();
+
+        await foreach (var update in agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken))
+        {
+            if (!string.IsNullOrWhiteSpace(update.Text))
+            {
+                answerBuilder.Append(update.Text);
+                yield return CopilotStreamEvent.Delta(update.Text);
+            }
+        }
+
+        var answer = answerBuilder.ToString().Trim();
+        yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));
+    }
+
+    private static CopilotResponse BuildResponse(string answer, AgentProfile profile, string threadId)
+    {
+        var citations = CitationExtractor.Extract(answer);
+        return new CopilotResponse(
+            answer,
+            citations,
+            [
+                $"Routed to {profile.Name}.",
+                $"Loaded runtime profile '{profile.Name}' from file-backed configuration.",
+                "Executed Agent Framework streaming run over the Gemini client."
+            ],
+            Array.Empty<string>(),
+            profile.Name,
+            citations.Count > 0 ? "medium" : "low",
+            threadId,
+            IsStub: false);
+    }
+
+    private AIAgent GetOrCreateAgent(AgentProfile profile)
+    {
+        return _agents.GetOrAdd(profile.Name, _ =>
+        {
+            var options = new OpenAIClientOptions { Endpoint = GeminiOpenAIEndpoint };
+            var client = new OpenAIClient(new ApiKeyCredential(_provider.GeminiApiKey!), options);
+            var instructions = PromptComposer.Compose(profile);
+            var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
+
+            var chatClient = client.GetChatClient(_provider.GeminiModel ?? "gemini-3.1-flash").AsIChatClient();
+            return chatClient.AsAIAgent(
+                name: profile.DisplayName,
+                instructions: instructions,
+                tools: tools.Cast<AITool>().ToList());
+        });
+    }
+
+    private async Task<AgentSession> GetOrCreateSessionAsync(string threadId, string agentName, AIAgent agent)
+    {
+        var key = $"{threadId}::{agentName}";
+
+        if (_sessions.TryGetValue(key, out var existing))
+        {
+            existing.LastUsed = DateTime.UtcNow;
+            return existing.Session;
+        }
+
+        await _sessionLock.WaitAsync();
+        try
+        {
+            // Double-check after acquiring lock
+            if (_sessions.TryGetValue(key, out existing))
+            {
+                existing.LastUsed = DateTime.UtcNow;
+                return existing.Session;
+            }
+
+            // Evict least-recently-used sessions to reclaim capacity
+            if (_sessions.Count >= MaxSessions)
+            {
+                var keysToRemove = _sessions
+                    .OrderBy(kvp => kvp.Value.LastUsed)
+                    .Take(_sessions.Count / 2)
+                    .Select(kvp => kvp.Key)
+                    .ToList();
+                foreach (var staleKey in keysToRemove)
+                    _sessions.TryRemove(staleKey, out _);
+            }
+
+            var created = await agent.CreateSessionAsync();
+            _sessions[key] = new SessionEntry(created, DateTime.UtcNow);
+            return created;
+        }
+        finally
+        {
+            _sessionLock.Release();
+        }
+    }
+}

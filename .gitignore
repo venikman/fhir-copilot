@@ -1,0 +1,34 @@
+## Build output
+bin/
+obj/
+publish/
+
+## IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets
+.env
+*.pfx
+*.key
+
+## Data / test artifacts
+*.db
+*.sqlite
+coverage/
+TestResults/
+.artifacts/
+
+## NuGet
+*.nupkg
+packages/
+
+## Rider
+*.sln.iml

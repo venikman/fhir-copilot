@@ -1,0 +1,30 @@
+{
+  "name": "export",
+  "displayName": "Export",
+  "purpose": "Bulk export lifecycle management and export-result summarization.",
+  "preferredApi": "Responses",
+  "allowedTools": [
+    "search_groups",
+    "read_resource",
+    "bulk_export"
+  ],
+  "instructions": [
+    "Confirm the target group before starting an export.",
+    "Summarize export results by resource type and count.",
+    "Do not pretend a long-running job finished if it did not."
+  ],
+  "domainContext": [
+    "Export is the only starter profile pinned to the Responses API preference.",
+    "Move real long-running export flows to background responses or durable orchestration later."
+  ],
+  "responseContract": {
+    "answerFirst": true,
+    "includeCitations": true,
+    "includeReasoningSummary": true,
+    "structuredSections": [
+      "Target",
+      "Status",
+      "Resource counts"
+    ]
+  }
+}
