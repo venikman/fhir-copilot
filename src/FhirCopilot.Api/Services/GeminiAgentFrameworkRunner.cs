@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
+using System.Net;
 using System.Text;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
@@ -45,22 +46,40 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
     {
         _logger.LogInformation("RunAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
 
-        var agent = GetOrCreateAgent(profile);
-        var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+        var models = _provider.GetModelChain();
+        HttpRequestException? lastException = null;
 
-        var answerBuilder = new StringBuilder();
-
-        await foreach (var update in agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken))
+        foreach (var model in models)
         {
-            if (!string.IsNullOrWhiteSpace(update.Text))
+            try
             {
-                answerBuilder.Append(update.Text);
+                var agent = GetOrCreateAgent(profile, model);
+                var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+
+                var answerBuilder = new StringBuilder();
+
+                await foreach (var update in agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken))
+                {
+                    if (!string.IsNullOrWhiteSpace(update.Text))
+                    {
+                        answerBuilder.Append(update.Text);
+                    }
+                }
+
+                var answer = answerBuilder.ToString().Trim();
+                System.Diagnostics.Activity.Current?.SetTag("copilot.model", model);
+                _logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
+                    profile.Name, threadId, model, answer.Length);
+                return BuildResponse(answer, profile, threadId);
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                lastException = ex;
+                _logger.LogWarning("Model {Model} rate-limited (429), falling back to next model", model);
             }
         }
 
-        var answer = answerBuilder.ToString().Trim();
-        _logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, answer length {AnswerLength}", profile.Name, threadId, answer.Length);
-        return BuildResponse(answer, profile, threadId);
+        throw lastException!;
     }
 
     public async IAsyncEnumerable<CopilotStreamEvent> StreamAsync(
@@ -69,27 +88,67 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
         string threadId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var agent = GetOrCreateAgent(profile);
-        var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
-
-        _logger.LogInformation("StreamAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
+        var models = _provider.GetModelChain();
+        HttpRequestException? lastException = null;
 
         yield return CopilotStreamEvent.Meta(profile.Name, threadId, isStub: false);
 
-        var answerBuilder = new StringBuilder();
-
-        await foreach (var update in agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken))
+        foreach (var model in models)
         {
-            if (!string.IsNullOrWhiteSpace(update.Text))
+            var succeeded = false;
+            var answerBuilder = new StringBuilder();
+
+            _logger.LogInformation("StreamAsync attempting model {Model} for agent {AgentName}, thread {ThreadId}",
+                model, profile.Name, threadId);
+
+            var agent = GetOrCreateAgent(profile, model);
+            var session = await GetOrCreateSessionAsync(threadId, profile.Name, agent);
+
+            var enumerator = agent.RunStreamingAsync(query, session, cancellationToken: cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+
+            try
             {
-                answerBuilder.Append(update.Text);
-                yield return CopilotStreamEvent.Delta(update.Text);
+                while (true)
+                {
+                    bool moved;
+                    try
+                    {
+                        moved = await enumerator.MoveNextAsync();
+                    }
+                    catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        lastException = ex;
+                        _logger.LogWarning("Model {Model} rate-limited (429) during stream, falling back to next model", model);
+                        break;
+                    }
+
+                    if (!moved) { succeeded = true; break; }
+
+                    if (!string.IsNullOrWhiteSpace(enumerator.Current.Text))
+                    {
+                        answerBuilder.Append(enumerator.Current.Text);
+                        yield return CopilotStreamEvent.Delta(enumerator.Current.Text);
+                    }
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync();
+            }
+
+            if (succeeded)
+            {
+                var answer = answerBuilder.ToString().Trim();
+                System.Diagnostics.Activity.Current?.SetTag("copilot.model", model);
+                _logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
+                    profile.Name, threadId, model, answer.Length);
+                yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));
+                yield break;
             }
         }
 
-        var answer = answerBuilder.ToString().Trim();
-        _logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, answer length {AnswerLength}", profile.Name, threadId, answer.Length);
-        yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));
+        throw lastException!;
     }
 
     private static CopilotResponse BuildResponse(string answer, AgentProfile profile, string threadId)
@@ -110,11 +169,11 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
             IsStub: false);
     }
 
-    private AIAgent GetOrCreateAgent(AgentProfile profile)
+    private AIAgent GetOrCreateAgent(AgentProfile profile, string model)
     {
-        return _agents.GetOrAdd(profile.Name, _ =>
+        var cacheKey = $"{profile.Name}::{model}";
+        return _agents.GetOrAdd(cacheKey, _ =>
         {
-            var model = _provider.GeminiModel ?? "gemini-3-flash-preview";
             var instructions = PromptComposer.Compose(profile);
             var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
 
