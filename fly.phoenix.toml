@@ -1,0 +1,32 @@
+app = 'fhir-copilot-phoenix'
+primary_region = 'iad'
+
+[build]
+  image = 'arizephoenix/phoenix:latest'
+
+[env]
+  PHOENIX_WORKING_DIR = "/data"
+
+[mounts]
+  source = "phoenix_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 6006
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[services]]
+  internal_port = 4317
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 4317
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
