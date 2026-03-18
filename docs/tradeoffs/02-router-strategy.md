@@ -46,5 +46,5 @@
 - Recommendation: start with O1, keep the config surface, then move to O3 after labeled routing data exists.
 
 ## Decision hook
-- Link to `DECISIONS.md` row: D-0002
+- Link to `../DECISIONS.md` row: D-0002
 - Follow-up experiment: build a labeled route corpus and compare O1 vs O3 on ambiguous boundary cases.

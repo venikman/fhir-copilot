@@ -1,10 +1,10 @@
 # FPF trade-off studies for `venikman/fhir-agents`
 
 ## Direct answer
-Do the trade-off studies at the repo's existing decision seams, and keep the short decision in `DECISIONS.md` while storing the full FPF study as a separate doc under `docs/tradeoffs/`.
+Do the trade-off studies at the repo's existing decision seams, and keep the short decision in `docs/DECISIONS.md` while storing the full FPF study as a separate doc under `docs/tradeoffs/`.
 
 Suggested structure:
-- `DECISIONS.md` = one-line decision log
+- `docs/DECISIONS.md` = one-line decision log
 - `docs/tradeoffs/index.md` = backlog + status
 - `docs/tradeoffs/NN-<seam>.md` = one FPF trade-off study per seam
 
@@ -48,7 +48,7 @@ Use this minimum stack for every study:
 - prompt maintenance effort
 - explainability quality
 
-**Repo seam:** `src/agents/definitions.ts`, `src/agents/router.ts`, `DECISIONS.md`
+**Repo seam:** `src/agents/definitions.ts`, `src/agents/router.ts`, `docs/DECISIONS.md`
 
 **First slice:** compare current 6-agent setup against a monolith on 30 representative queries split across lookup/search/analytics/clinical/cohort/export.
 
@@ -68,7 +68,7 @@ Use this minimum stack for every study:
 - cost per query
 - failure containment
 
-**Repo seam:** `src/agents/router.ts`, `docs/http/router.http`, `DECISIONS.md`
+**Repo seam:** `src/agents/router.ts`, `docs/http/router.http`, `docs/DECISIONS.md`
 
 **First slice:** 100 labeled queries, including deliberately ambiguous boundary cases between search/cohort and analytics/clinical.
 
@@ -106,7 +106,7 @@ Use this minimum stack for every study:
 - extra token cost
 - determinism/reproducibility
 
-**Repo seam:** `src/explainability.ts`, `DECISIONS.md`
+**Repo seam:** `src/explainability.ts`, `docs/DECISIONS.md`
 
 **First slice:** replay 50 saved traces and score explanation completeness and confidence calibration against human labels.
 
@@ -125,7 +125,7 @@ Use this minimum stack for every study:
 - deploy complexity
 - operational portability
 
-**Repo seam:** `src/checkpointer.ts`, `copilot-core.ts`, `DECISIONS.md`
+**Repo seam:** `src/checkpointer.ts`, `copilot-core.ts`, `docs/DECISIONS.md`
 
 **First slice:** benchmark multi-turn sessions with restart recovery and concurrent thread access.
 
@@ -144,7 +144,7 @@ Use this minimum stack for every study:
 - infra compatibility
 - typed-contract strength
 
-**Repo seam:** `src/server.ts`, `docs/COPILOT.md`, `DECISIONS.md`
+**Repo seam:** `src/server.ts`, `docs/COPILOT.md`, `docs/DECISIONS.md`
 
 **First slice:** compare WebSocket vs SSE for streaming UX, cancellation, reconnect behavior, and proxy compatibility.
 
@@ -163,7 +163,7 @@ Use this minimum stack for every study:
 - deployment overhead
 - cost of ownership
 
-**Repo seam:** `src/otel.ts`, `docs/OBSERVABILITY.md`, `.env.example`, `DECISIONS.md`
+**Repo seam:** `src/otel.ts`, `docs/OBSERVABILITY.md`, `.env.example`, `docs/DECISIONS.md`
 
 **First slice:** compare redacted vs content-capturing traces in staging only, with a structured privacy review.
 
@@ -182,7 +182,7 @@ Use this minimum stack for every study:
 - local dev friction
 - offline testability
 
-**Repo seam:** `package.json`, `LOCAL_SETUP.md`, `.env.example`, `DECISIONS.md`
+**Repo seam:** `package.json`, `LOCAL_SETUP.md`, `.env.example`, `docs/DECISIONS.md`
 
 **First slice:** one constrained benchmark matrix: {Bun, Node} x {current model, stronger model} on the same labeled query set.
 
@@ -247,17 +247,17 @@ Use this minimum stack for every study:
 - Recommendation:
 
 ## Decision hook
-- Link to `DECISIONS.md` row:
+- Link to `docs/DECISIONS.md` row:
 - Follow-up experiment:
 ```
 
 ## Where to physically put them
-- Keep the one-line outcome in `DECISIONS.md`.
+- Keep the one-line outcome in `docs/DECISIONS.md`.
 - Put the actual study in `docs/tradeoffs/NN-name.md`.
 - Put replay/benchmark fixtures under `docs/http/` or a new `scripts/bench/` folder.
 - Put result summaries in `docs/tradeoffs/index.md`.
 
 ## Minimal governance rule
-No decision row should be added to `DECISIONS.md` unless there is either:
+No decision row should be added to `docs/DECISIONS.md` unless there is either:
 - a linked trade-off study, or
 - an explicit note saying the decision is provisional and awaiting study.

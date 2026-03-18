@@ -46,5 +46,5 @@
 - Recommendation:
 
 ## Decision hook
-- Link to `DECISIONS.md` row:
+- Link to `../DECISIONS.md` row:
 - Follow-up experiment:

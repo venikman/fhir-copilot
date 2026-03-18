@@ -46,5 +46,5 @@
 - Recommendation: start with O2 in the starter, but keep the cutover seam explicit for an O3 or workflow-first redesign.
 
 ## Decision hook
-- Link to `DECISIONS.md` row: D-0001
+- Link to `../DECISIONS.md` row: D-0001
 - Follow-up experiment: compare 30 labeled queries across O2 and O3 after Firely integration.

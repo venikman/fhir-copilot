@@ -25,12 +25,16 @@ It is intentionally **thin but runnable**:
 .
 ├── .codex/                         # imported FPF workspace agent config
 ├── AGENTS.md                       # repo-wide orchestration policy
-├── DECISIONS.md                    # short decision log
-├── bundle-manifest.md              # what was imported vs created
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   ├── http/copilot.http
-│   └── tradeoffs/
+│   ├── DECISIONS.md                # short decision log
+│   ├── bundle-manifest.md          # what was imported vs created
+│   ├── PROD_READINESS.md           # production gaps + completed work
+│   ├── compliance/
+│   │   └── hipaa-logging.md
+│   ├── tradeoffs/
+│   ├── tutorials/
+│   └── http/copilot.http
 ├── src/
 │   └── FhirCopilot.Api/
 │       ├── Contracts/
