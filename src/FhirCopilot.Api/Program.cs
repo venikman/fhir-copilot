@@ -4,6 +4,36 @@ using FhirCopilot.Api.Fhir;
 using FhirCopilot.Api.Options;
 using FhirCopilot.Api.Services;
 
+// Load .env file if present (dev convenience — prod uses real env vars)
+static void LoadEnvFile()
+{
+    var dir = new DirectoryInfo(Directory.GetCurrentDirectory());
+    while (dir is not null)
+    {
+        var envFile = Path.Combine(dir.FullName, ".env");
+        if (File.Exists(envFile))
+        {
+            foreach (var line in File.ReadAllLines(envFile))
+            {
+                var trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith('#'))
+                    continue;
+
+                var sep = trimmed.IndexOf('=');
+                if (sep <= 0)
+                    continue;
+
+                var key = trimmed[..sep].Trim();
+                var value = trimmed[(sep + 1)..].Trim();
+                Environment.SetEnvironmentVariable(key, value);
+            }
+            return;
+        }
+        dir = dir.Parent;
+    }
+}
+LoadEnvFile();
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();

@@ -3,12 +3,11 @@ namespace FhirCopilot.Api.Options;
 public sealed class RuntimeOptions
 {
     public string AgentProfilesPath { get; set; } = "config/agents";
-    public bool UseStubWhenProviderMissing { get; set; } = true;
 }
 
 public sealed class ProviderOptions
 {
-    public string Mode { get; set; } = "Stub";
+    public string Mode { get; set; } = "Gemini";
     public string? GeminiModel { get; set; } = "gemini-3.1-flash";
     public string? FhirBaseUrl { get; set; }
 
