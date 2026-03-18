@@ -94,8 +94,35 @@ app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is runn
 
 app.MapPost("/api/copilot", async (CopilotRequest request, ICopilotService service, CancellationToken cancellationToken) =>
 {
-    var response = await service.RunAsync(request, cancellationToken);
-    return Results.Ok(response);
+    try
+    {
+        var response = await service.RunAsync(request, cancellationToken);
+        return Results.Ok(response);
+    }
+    catch (HttpRequestException)
+    {
+        return Results.Json(
+            new CopilotErrorResponse(new CopilotError("upstream_error", "The AI service returned an error. Please retry.")),
+            statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+    {
+        return Results.Json(
+            new CopilotErrorResponse(new CopilotError("timeout", "The request timed out. Please retry.")),
+            statusCode: StatusCodes.Status504GatewayTimeout);
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.Json(
+            new CopilotErrorResponse(new CopilotError("invalid_request", ex.Message)),
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+    catch (Exception)
+    {
+        return Results.Json(
+            new CopilotErrorResponse(new CopilotError("internal_error", "An unexpected error occurred.")),
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
 });
 
 // POST keeps clinical queries out of URLs, server logs, and browser history.
