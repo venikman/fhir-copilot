@@ -1,20 +1,18 @@
-using System.ClientModel;
 using System.Collections.Concurrent;
 using System.Text;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
 using FhirCopilot.Api.Models;
 using FhirCopilot.Api.Options;
+using GenerativeAI.Microsoft;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using OpenAI;
 
 namespace FhirCopilot.Api.Services;
 
 public sealed class GeminiAgentFrameworkRunner : IAgentRunner
 {
-    private static readonly Uri GeminiOpenAIEndpoint = new("https://generativelanguage.googleapis.com/v1beta/openai/");
     private const int MaxSessions = 200;
 
     private readonly ProviderOptions _provider;
@@ -108,13 +106,11 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
     {
         return _agents.GetOrAdd(profile.Name, _ =>
         {
-            var options = new OpenAIClientOptions { Endpoint = GeminiOpenAIEndpoint };
-            var client = new OpenAIClient(new ApiKeyCredential(_provider.GeminiApiKey!), options);
+            var model = _provider.GeminiModel ?? "gemini-3.1-flash";
             var instructions = PromptComposer.Compose(profile);
             var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
 
-            var chatClient = client.GetChatClient(_provider.GeminiModel ?? "gemini-3.1-flash")
-                .AsIChatClient()
+            var chatClient = new GenerativeAIChatClient(_provider.GeminiApiKey!, model)
                 .AsBuilder()
                 .UseOpenTelemetry(sourceName: "FhirCopilot.GenAI")
                 .Build();

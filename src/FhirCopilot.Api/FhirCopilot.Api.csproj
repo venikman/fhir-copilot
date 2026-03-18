@@ -9,6 +9,8 @@
     <PackageReference Include="Microsoft.Agents.AI.OpenAI" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="OpenAI" />
+    <PackageReference Include="Google_GenerativeAI" />
+    <PackageReference Include="Google_GenerativeAI.Microsoft" />
   </ItemGroup>
 
   <ItemGroup>
