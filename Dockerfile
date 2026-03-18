@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0-preview AS build
 WORKDIR /src
 
-COPY Directory.Build.props ./
+COPY Directory.Build.props Directory.Packages.props ./
 COPY src/FhirCopilot.Api/FhirCopilot.Api.csproj src/FhirCopilot.Api/
 RUN dotnet restore src/FhirCopilot.Api/FhirCopilot.Api.csproj
 
