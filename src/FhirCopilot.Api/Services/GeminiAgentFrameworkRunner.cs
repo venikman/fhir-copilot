@@ -114,7 +114,7 @@ public sealed class GeminiAgentFrameworkRunner : IAgentRunner
     {
         return _agents.GetOrAdd(profile.Name, _ =>
         {
-            var model = _provider.GeminiModel ?? "gemini-3.1-flash";
+            var model = _provider.GeminiModel ?? "gemini-3-flash-preview";
             var instructions = PromptComposer.Compose(profile);
             var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
 

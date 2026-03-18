@@ -88,7 +88,7 @@ Create a `.env` file at the repo root (see `.env.example`):
 ```env
 Provider__Mode=Gemini
 GEMINI_API_KEY=your-key-here
-Provider__GeminiModel=gemini-3.1-flash
+Provider__GeminiModel=gemini-3-flash-preview
 ```
 
 The runner uses the Google GenerativeAI native SDK with Microsoft Agent Framework's `AIAgent` abstraction, function tools from `FhirToolbox`, and `AgentSession` per `(threadId, agent)` pair.
