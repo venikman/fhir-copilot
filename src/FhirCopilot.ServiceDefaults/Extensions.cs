@@ -47,6 +47,7 @@ public static class Extensions
             {
                 tracing
                     .AddSource(builder.Environment.ApplicationName)
+                    .AddSource("FhirCopilot.GenAI")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();
             });

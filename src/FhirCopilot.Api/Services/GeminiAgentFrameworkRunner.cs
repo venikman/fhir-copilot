@@ -116,7 +116,11 @@ public sealed class GeminiAgentFrameworkRunner
             var instructions = PromptComposer.Compose(profile);
             var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
 
-            var chatClient = client.GetChatClient(_provider.GeminiModel ?? "gemini-3.1-flash").AsIChatClient();
+            var chatClient = client.GetChatClient(_provider.GeminiModel ?? "gemini-3.1-flash")
+                .AsIChatClient()
+                .AsBuilder()
+                .UseOpenTelemetry(sourceName: "FhirCopilot.GenAI")
+                .Build();
             return chatClient.AsAIAgent(
                 name: profile.DisplayName,
                 instructions: instructions,
