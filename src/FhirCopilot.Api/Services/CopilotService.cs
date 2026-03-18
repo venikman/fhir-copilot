@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Options;
 using Microsoft.Extensions.Options;
@@ -12,6 +13,8 @@ public interface ICopilotService
 
 public sealed class CopilotService : ICopilotService
 {
+    internal static readonly ActivitySource Telemetry = new("FhirCopilot.Agent");
+
     private readonly IIntentRouter _router;
     private readonly IAgentProfileStore _profileStore;
     private readonly StubAgentRunner _stubRunner;
@@ -37,12 +40,20 @@ public sealed class CopilotService : ICopilotService
 
     public async Task<CopilotResponse> RunAsync(CopilotRequest request, CancellationToken cancellationToken)
     {
+        using var activity = Telemetry.StartActivity("copilot.request");
+
         var threadId = ResolveThreadId(request);
+        activity?.SetTag("copilot.thread_id", threadId);
+
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
+        var runner = _geminiRunner.IsConfigured ? "Gemini" : "Stub";
+
+        activity?.SetTag("copilot.agent", agentType);
+        activity?.SetTag("copilot.runner", runner);
 
         _logger.LogInformation("Routed query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
-            agentType, threadId, _geminiRunner.IsConfigured ? "Gemini" : "Stub");
+            agentType, threadId, runner);
 
         if (_geminiRunner.IsConfigured)
         {
@@ -61,12 +72,20 @@ public sealed class CopilotService : ICopilotService
         CopilotRequest request,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        using var activity = Telemetry.StartActivity("copilot.stream");
+
         var threadId = ResolveThreadId(request);
+        activity?.SetTag("copilot.thread_id", threadId);
+
         var agentType = await _router.RouteAsync(request.Query, cancellationToken);
         var profile = _profileStore.GetAgent(agentType);
+        var runner = _geminiRunner.IsConfigured ? "Gemini" : "Stub";
+
+        activity?.SetTag("copilot.agent", agentType);
+        activity?.SetTag("copilot.runner", runner);
 
         _logger.LogInformation("Streaming query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
-            agentType, threadId, _geminiRunner.IsConfigured ? "Gemini" : "Stub");
+            agentType, threadId, runner);
 
         if (_geminiRunner.IsConfigured)
         {
