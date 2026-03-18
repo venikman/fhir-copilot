@@ -16,4 +16,8 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FhirCopilot.ServiceDefaults\FhirCopilot.ServiceDefaults.csproj" />
+  </ItemGroup>
 </Project>

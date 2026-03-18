@@ -6,6 +6,8 @@ using FhirCopilot.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.AddServiceDefaults();
+
 builder.Services.Configure<RuntimeOptions>(builder.Configuration.GetSection("Runtime"));
 builder.Services.Configure<ProviderOptions>(builder.Configuration.GetSection("Provider"));
 
@@ -35,8 +37,6 @@ builder.Services.AddSingleton<FhirToolbox>();
 builder.Services.AddSingleton<StubAgentRunner>();
 builder.Services.AddSingleton<GeminiAgentFrameworkRunner>();
 builder.Services.AddSingleton<ICopilotService, CopilotService>();
-builder.Services.AddHealthChecks();
-
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -50,8 +50,9 @@ ToolRegistry.ValidateProfiles(
     app.Services.GetRequiredService<IAgentProfileStore>(),
     app.Services.GetRequiredService<ILogger<Program>>());
 
+app.MapDefaultEndpoints();
+
 app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is running. See /health or /api/copilot."));
-app.MapHealthChecks("/health");
 
 app.MapPost("/api/copilot", async (CopilotRequest request, ICopilotService service, CancellationToken cancellationToken) =>
 {
