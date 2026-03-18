@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using FhirCopilot.Api.Contracts;
+using FhirCopilot.Api.Models;
 
 namespace FhirCopilot.Api.Services;
 
@@ -63,9 +64,10 @@ public sealed class CopilotService : ICopilotService
         {
             return await _runner.RunAsync(profile, request.Query, threadId, cancellationToken);
         }
-        catch
+        catch (Exception ex)
         {
             status = "error";
+            _logger.LogError(ex, "Copilot request failed for agent {AgentType}", agentType);
             throw;
         }
         finally
@@ -104,13 +106,18 @@ public sealed class CopilotService : ICopilotService
             agentType, threadId, _runner.GetType().Name);
 
         var completed = false;
+        IAsyncEnumerable<CopilotStreamEvent>? events = null;
+        Exception? caughtException = null;
+
         try
         {
-            await foreach (var evt in _runner.StreamAsync(profile, request.Query, threadId, cancellationToken))
-            {
-                yield return evt;
-            }
+            events = StreamEventsAsync(profile, request.Query, threadId, cancellationToken);
             completed = true;
+        }
+        catch (Exception ex)
+        {
+            caughtException = ex;
+            _logger.LogError(ex, "Copilot stream failed for agent {AgentType}", agentType);
         }
         finally
         {
@@ -123,6 +130,28 @@ public sealed class CopilotService : ICopilotService
             RequestCounter.Add(1, tags);
             DurationHistogram.Record(sw.Elapsed.TotalMilliseconds,
                 new KeyValuePair<string, object?>("copilot.agent", agentType));
+        }
+
+        if (caughtException != null)
+        {
+            throw caughtException;
+        }
+
+        await foreach (var evt in events!)
+        {
+            yield return evt;
+        }
+    }
+
+    private async IAsyncEnumerable<CopilotStreamEvent> StreamEventsAsync(
+        AgentProfile profile,
+        string query,
+        string threadId,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var evt in _runner.StreamAsync(profile, query, threadId, cancellationToken))
+        {
+            yield return evt;
         }
     }
 
