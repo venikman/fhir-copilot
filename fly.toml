@@ -16,6 +16,12 @@ primary_region = 'iad'
   min_machines_running = 0
   processes = ['app']
 
+[env]
+  OTEL_SERVICE_NAME = "fhir-copilot"
+  OTEL_RESOURCE_ATTRIBUTES = "deployment.environment=production"
+  # Set OTEL_EXPORTER_OTLP_ENDPOINT via `fly secrets set` to enable OTLP export
+  # Example: fly secrets set OTEL_EXPORTER_OTLP_ENDPOINT=https://otel-collector.example.com:4317
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'

@@ -3,6 +3,7 @@ WORKDIR /src
 
 COPY Directory.Build.props Directory.Packages.props ./
 COPY src/FhirCopilot.Api/FhirCopilot.Api.csproj src/FhirCopilot.Api/
+COPY src/FhirCopilot.ServiceDefaults/FhirCopilot.ServiceDefaults.csproj src/FhirCopilot.ServiceDefaults/
 RUN dotnet restore src/FhirCopilot.Api/FhirCopilot.Api.csproj
 
 COPY src/ src/
