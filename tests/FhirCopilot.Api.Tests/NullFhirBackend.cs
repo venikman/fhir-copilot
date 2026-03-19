@@ -18,5 +18,6 @@ internal sealed class NullFhirBackend : IFhirBackend
     public Task<IReadOnlyList<ObservationRecord>> SearchObservationsAsync(string? patientId, string? code, string? category, string? dateFrom, string? dateTo, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<IReadOnlyList<MedicationRecord>> SearchMedicationsAsync(string? patientId, string? status, string? code, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<IReadOnlyList<AllergyRecord>> SearchAllergiesAsync(string? patientId, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<IReadOnlyList<ProcedureRecord>> SearchProceduresAsync(string? patientId, string? code, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<ExportSummary> BulkExportAsync(string groupId, CancellationToken ct = default) => throw new NotImplementedException();
 }

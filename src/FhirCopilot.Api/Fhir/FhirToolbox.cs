@@ -87,6 +87,12 @@ public sealed class FhirToolbox(IFhirBackend backend)
     public async Task<string> SearchAllergies([Description("Optional patient id.")] string? patientId = null)
         => JsonSerializer.Serialize(await _backend.SearchAllergiesAsync(patientId), Services.JsonDefaults.Serializer);
 
+    [Description("Search Procedure resources by patient or CPT code.")]
+    public async Task<string> SearchProcedures(
+        [Description("Optional patient id.")] string? patientId = null,
+        [Description("Optional CPT code or procedure display text.")] string? code = null)
+        => JsonSerializer.Serialize(await _backend.SearchProceduresAsync(patientId, code), Services.JsonDefaults.Serializer);
+
     private static readonly Regex SafeExpressionPattern = new(
         @"^[\d\s\+\-\*\/\.\(\)\%]+$", RegexOptions.Compiled);
 

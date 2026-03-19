@@ -66,6 +66,9 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
     public Task<IReadOnlyList<AllergyRecord>> SearchAllergiesAsync(string? patientId, CancellationToken ct = default) =>
         SearchAsync(BuildSearchUrl("AllergyIntolerance", ("patient", patientId)), MapAllergy, ct);
 
+    public Task<IReadOnlyList<ProcedureRecord>> SearchProceduresAsync(string? patientId, string? code, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Procedure", ("patient", patientId), ("code", code)), MapProcedure, ct);
+
     public async Task<ExportSummary> BulkExportAsync(string groupId, CancellationToken ct = default)
     {
         // Simplified: count resources for the group's members
@@ -212,4 +215,9 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
         new(Str(r, "id"), Ref(r, "patient"),
             Coding(r, "code"), Coding(r, "code", "display"),
             Str(r, "criticality"), Coding(r, "clinicalStatus"));
+
+    private static ProcedureRecord MapProcedure(JsonElement r) =>
+        new(Str(r, "id"), Ref(r, "subject"),
+            Coding(r, "code"), Coding(r, "code", "display"),
+            Str(r, "status"), Str(r, "performedDateTime"));
 }

@@ -11,7 +11,7 @@ public static class ToolRegistry
         "search_groups", "read_resource", "list_resources", "bulk_export",
         "search_patients", "search_encounters", "search_conditions",
         "search_observations", "search_medications",
-        "search_allergies", "calculator"
+        "search_allergies", "search_procedures", "calculator"
     };
 
     public static IReadOnlyList<AIFunction> BuildTools(FhirToolbox toolbox, IEnumerable<string> allowedToolNames)
@@ -53,6 +53,7 @@ public static class ToolRegistry
             ["search_observations"] = AIFunctionFactory.Create(toolbox.SearchObservations),
             ["search_medications"] = AIFunctionFactory.Create(toolbox.SearchMedications),
             ["search_allergies"] = AIFunctionFactory.Create(toolbox.SearchAllergies),
+            ["search_procedures"] = AIFunctionFactory.Create(toolbox.SearchProcedures),
             ["calculator"] = AIFunctionFactory.Create(toolbox.Calculator)
         };
 }
