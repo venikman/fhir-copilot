@@ -8,7 +8,6 @@
     "search_conditions",
     "search_observations",
     "search_medications",
-    "search_procedures",
     "search_allergies",
     "read_resource"
   ],
@@ -21,13 +20,8 @@
     "Search is for one resource type at a time.",
     "If the user asks for combined criteria across multiple resource types, that belongs to cohort."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Answer",
-      "Matching resources"
-    ]
-  }
+  "structuredSections": [
+    "Answer",
+    "Matching resources"
+  ]
 }

@@ -105,7 +105,7 @@ public sealed class CopilotService : ICopilotService
         _logger.LogInformation("Streaming query to agent {AgentType}, thread {ThreadId}, runner {Runner}",
             agentType, threadId, _runner.GetType().Name);
 
-        var completed = false;
+        var errored = false;
         var enumerator = _runner.StreamAsync(profile, request.Query, threadId, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
         try
@@ -117,8 +117,13 @@ public sealed class CopilotService : ICopilotService
                 {
                     moved = await enumerator.MoveNextAsync();
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
+                    errored = true;
                     _logger.LogError(ex, "Copilot stream failed for agent {AgentType}", agentType);
                     throw;
                 }
@@ -126,16 +131,18 @@ public sealed class CopilotService : ICopilotService
                 if (!moved) break;
                 yield return enumerator.Current;
             }
-            completed = true;
         }
         finally
         {
             await enumerator.DisposeAsync();
             sw.Stop();
+            var status = errored ? "error"
+                : cancellationToken.IsCancellationRequested ? "cancelled"
+                : "success";
             var tags = new TagList
             {
                 { "copilot.agent", agentType },
-                { "copilot.status", completed ? "success" : "error" }
+                { "copilot.status", status }
             };
             RequestCounter.Add(1, tags);
             DurationHistogram.Record(sw.Elapsed.TotalMilliseconds,

@@ -8,7 +8,6 @@
     "search_conditions",
     "search_observations",
     "search_medications",
-    "search_procedures",
     "search_allergies",
     "list_resources",
     "calculator",
@@ -23,14 +22,9 @@
     "Analytics is for derived values, not for narrative summaries.",
     "Do not hide the denominator when you state a percentage or rate."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Answer",
-      "Computation",
-      "Evidence"
-    ]
-  }
+  "structuredSections": [
+    "Answer",
+    "Computation",
+    "Evidence"
+  ]
 }

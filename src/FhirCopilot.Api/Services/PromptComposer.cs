@@ -36,20 +36,14 @@ public static class PromptComposer
         }
 
         builder.AppendLine("Response contract:");
-        builder.AppendLine(profile.ResponseContract.AnswerFirst
-            ? "- Lead with the direct answer."
-            : "- Do not force answer-first output.");
-        builder.AppendLine(profile.ResponseContract.IncludeCitations
-            ? "- Include resource citations when evidence is available."
-            : "- Citations are optional.");
-        builder.AppendLine(profile.ResponseContract.IncludeReasoningSummary
-            ? "- Include a short reasoning summary."
-            : "- Do not emit a reasoning summary unless needed.");
+        builder.AppendLine("- Lead with the direct answer.");
+        builder.AppendLine("- Include resource citations when evidence is available.");
+        builder.AppendLine("- Include a short reasoning summary.");
 
-        if (profile.ResponseContract.StructuredSections.Count > 0)
+        if (profile.StructuredSections.Count > 0)
         {
             builder.AppendLine("- Use these sections when relevant:");
-            foreach (var section in profile.ResponseContract.StructuredSections)
+            foreach (var section in profile.StructuredSections)
             {
                 builder.AppendLine($"  - {section}");
             }

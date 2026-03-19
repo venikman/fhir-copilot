@@ -32,7 +32,7 @@ public sealed class TraceEnrichedConsoleFormatter : ConsoleFormatter
         var activity = Activity.Current;
 
         textWriter.Write('[');
-        textWriter.Write(timestamp.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+        textWriter.Write(timestamp.ToString(_options.UseUtcTimestamp ? "yyyy-MM-ddTHH:mm:ssZ" : "yyyy-MM-ddTHH:mm:sszzz"));
         textWriter.Write("] [");
         textWriter.Write(logEntry.LogLevel);
         textWriter.Write(']');

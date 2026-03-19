@@ -10,8 +10,20 @@
       "what insurance",
       "coverage for",
       "patient/",
+      "patient-",
       "encounter/",
-      "condition/"
+      "encounter-",
+      "condition/",
+      "condition-",
+      "observation/",
+      "observation-",
+      "medicationrequest/",
+      "medicationrequest-",
+      "procedure/",
+      "procedure-",
+      "allergyintolerance/",
+      "allergyintolerance-",
+      "group/"
     ],
     "search": [
       "find patients",
@@ -34,6 +46,7 @@
     ],
     "clinical": [
       "clinical summary",
+      "summary",
       "summarize",
       "tell me about",
       "what happened",

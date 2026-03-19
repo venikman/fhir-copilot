@@ -16,13 +16,8 @@
     "FHIR R4 attributed-population provider copilot.",
     "Use lookup when the user wants one record, coverage, ownership, or reference resolution."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Answer",
-      "Evidence"
-    ]
-  }
+  "structuredSections": [
+    "Answer",
+    "Evidence"
+  ]
 }

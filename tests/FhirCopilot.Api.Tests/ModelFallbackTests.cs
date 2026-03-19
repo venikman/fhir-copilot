@@ -9,7 +9,6 @@ public class ModelFallbackTests
     {
         var options = new ProviderOptions
         {
-            GeminiModel = "gemini-3-flash-preview",
             GeminiModels = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-3.1-pro-preview"]
         };
 
@@ -21,32 +20,31 @@ public class ModelFallbackTests
     }
 
     [Fact]
-    public void GetModelChain_falls_back_to_single_GeminiModel()
+    public void GetModelChain_falls_back_to_full_default_chain_when_GeminiModels_null()
     {
         var options = new ProviderOptions
         {
-            GeminiModel = "gemini-3-flash-preview",
             GeminiModels = null
         };
 
         var chain = options.GetModelChain();
 
-        Assert.Single(chain);
+        Assert.Equal(6, chain.Count);
         Assert.Equal("gemini-3-flash-preview", chain[0]);
+        Assert.Equal("gemini-2.0-flash", chain[5]);
     }
 
     [Fact]
-    public void GetModelChain_uses_default_when_nothing_set()
+    public void GetModelChain_falls_back_to_full_default_chain_when_GeminiModels_empty()
     {
         var options = new ProviderOptions
         {
-            GeminiModel = null,
-            GeminiModels = null
+            GeminiModels = []
         };
 
         var chain = options.GetModelChain();
 
-        Assert.Single(chain);
+        Assert.Equal(6, chain.Count);
         Assert.Equal("gemini-3-flash-preview", chain[0]);
     }
 }

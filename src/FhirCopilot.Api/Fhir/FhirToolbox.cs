@@ -83,14 +83,6 @@ public sealed class FhirToolbox(IFhirBackend backend)
             await _backend.SearchMedicationsAsync(patientId, status, code),
             Services.JsonDefaults.Serializer);
 
-    [Description("Search Procedure resources by patient or code/display text.")]
-    public async Task<string> SearchProcedures(
-        [Description("Optional patient id.")] string? patientId = null,
-        [Description("Optional CPT code or display text.")] string? code = null)
-        => JsonSerializer.Serialize(
-            await _backend.SearchProceduresAsync(patientId, code),
-            Services.JsonDefaults.Serializer);
-
     [Description("Search AllergyIntolerance resources by patient.")]
     public async Task<string> SearchAllergies([Description("Optional patient id.")] string? patientId = null)
         => JsonSerializer.Serialize(await _backend.SearchAllergiesAsync(patientId), Services.JsonDefaults.Serializer);

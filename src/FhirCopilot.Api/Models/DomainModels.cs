@@ -66,10 +66,3 @@ public sealed record AllergyRecord(
     string ClinicalStatus);
 
 public sealed record ExportSummary(string GroupId, string Status, IReadOnlyDictionary<string, int> ResourceCounts);
-
-public sealed record StubExecutionPlan(
-    string Answer,
-    IReadOnlyList<string> Reasoning,
-    IReadOnlyList<string> ToolsUsed,
-    IReadOnlyList<Contracts.Citation> Citations,
-    string Confidence);

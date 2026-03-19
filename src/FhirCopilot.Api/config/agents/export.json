@@ -15,14 +15,9 @@
   "domainContext": [
     "Move real long-running export flows to background responses or durable orchestration later."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Target",
-      "Status",
-      "Resource counts"
-    ]
-  }
+  "structuredSections": [
+    "Target",
+    "Status",
+    "Resource counts"
+  ]
 }

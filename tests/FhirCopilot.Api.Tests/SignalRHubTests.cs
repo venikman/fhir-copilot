@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Xunit.Abstractions;
 
 namespace FhirCopilot.Api.Tests;
 
@@ -13,20 +12,14 @@ namespace FhirCopilot.Api.Tests;
 public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTests.LocalLlmFactory>
 {
     private readonly LocalLlmFactory _factory;
-    private readonly ITestOutputHelper _output;
     private HubConnection _hub = null!;
-    private static bool? _llmAvailable;
 
-    public SignalRHubTests(LocalLlmFactory factory, ITestOutputHelper output)
-    {
-        _factory = factory;
-        _output = output;
-    }
+    public SignalRHubTests(LocalLlmFactory factory) => _factory = factory;
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
-        _llmAvailable ??= await CheckLlmAvailableAsync();
         _hub = CreateHubConnection();
+        return Task.CompletedTask;
     }
 
     public async Task DisposeAsync()
@@ -48,8 +41,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
     [Fact(Timeout = 60_000)]
     public async Task SendQuery_returns_response_from_real_llm()
     {
-        if (SkipIfNoLlm()) return;
-
         await _hub.StartAsync();
 
         var response = await _hub.InvokeAsync<CopilotResponse>(
@@ -66,8 +57,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
     [Fact(Timeout = 60_000)]
     public async Task StreamQuery_emits_meta_delta_done()
     {
-        if (SkipIfNoLlm()) return;
-
         await _hub.StartAsync();
 
         var events = await CollectStreamEventsAsync(
@@ -76,7 +65,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
         Assert.True(events.Count >= 2, $"Expected at least 2 events (meta + done), got {events.Count}");
         Assert.Equal("meta", events[0].Type);
         Assert.Equal("done", events[^1].Type);
-        // Deltas are expected but optional — tool-heavy queries may produce no text chunks
         if (events.Count >= 3)
             Assert.Contains(events, e => e.Type == "delta");
     }
@@ -84,8 +72,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
     [Fact(Timeout = 60_000)]
     public async Task StreamQuery_meta_has_agent_and_thread()
     {
-        if (SkipIfNoLlm()) return;
-
         await _hub.StartAsync();
 
         var events = await CollectStreamEventsAsync(
@@ -100,8 +86,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
     [Fact(Timeout = 60_000)]
     public async Task StreamQuery_deltas_reassemble_to_answer()
     {
-        if (SkipIfNoLlm()) return;
-
         await _hub.StartAsync();
 
         var events = await CollectStreamEventsAsync(
@@ -118,8 +102,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
     [Fact(Timeout = 120_000)]
     public async Task StreamQuery_preserves_threadId()
     {
-        if (SkipIfNoLlm()) return;
-
         await _hub.StartAsync();
 
         var threadId = "stream-persist-1";
@@ -154,30 +136,6 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
         return events;
     }
 
-    private static async Task<bool> CheckLlmAvailableAsync()
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            var response = await client.GetAsync("http://localhost:1234/v1/models");
-            return response.IsSuccessStatusCode;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private bool SkipIfNoLlm()
-    {
-        if (_llmAvailable != true)
-        {
-            _output.WriteLine("SKIPPED: Local LLM (LM Studio at localhost:1234) is not available.");
-            return true;
-        }
-        return false;
-    }
-
     public sealed class LocalLlmFactory : WebApplicationFactory<Program>
     {
         protected override IHost CreateHost(IHostBuilder builder)
@@ -187,9 +145,9 @@ public sealed class SignalRHubTests : IAsyncLifetime, IClassFixture<SignalRHubTe
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Provider:Mode"] = "Local",
-                    ["Provider:LocalEndpoint"] = "http://localhost:1234",
+                    ["Provider:LocalEndpoint"] = "http://localhost:1234/v1",
                     ["Provider:LocalModel"] = "zai-org/glm-4.7-flash",
-                    ["Provider:FhirBaseUrl"] = "",
+                    ["Provider:FhirBaseUrl"] = "https://bulk-fhir.fly.dev",
                 });
             });
             builder.ConfigureServices(services =>

@@ -12,7 +12,6 @@
     "search_conditions",
     "search_observations",
     "search_medications",
-    "search_procedures",
     "search_allergies",
     "calculator"
   ],
@@ -25,17 +24,12 @@
     "Clinical answers may cross multiple resource types.",
     "Narrative synthesis is the primary goal."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Demographics",
-      "Conditions",
-      "Medications",
-      "Observations",
-      "Encounters",
-      "Allergies"
-    ]
-  }
+  "structuredSections": [
+    "Demographics",
+    "Conditions",
+    "Medications",
+    "Observations",
+    "Encounters",
+    "Allergies"
+  ]
 }

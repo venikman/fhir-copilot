@@ -8,11 +8,12 @@ It is intentionally **thin but runnable**:
 - externalized runtime agent profiles in `src/FhirCopilot.Api/config/agents/*.json`
 - a deterministic keyword router for first boot
 - a Gemini-backed Microsoft Agent Framework runner that activates when `GEMINI_API_KEY` is set
-- a stub runner plus sample FHIR-like data so the project can boot before any model or real FHIR server is wired
+- a local LLM runner via any OpenAI-compatible server (LM Studio, Ollama, etc.)
+- `IFhirBackend` interface for plugging in any FHIR R4 data source
 
 ## What this starter optimizes for
 
-1. **Fast first boot.** The API can run in stub mode without external services.
+1. **Fail fast.** Missing LLM provider or FHIR backend crashes at startup with a clear error.
 2. **Config-first agent evolution.** Prompts, allowed tools, and API preference live in files, not code.
 3. **Low-regret cutover path.** Replace the sample FHIR backend with a Firely-based client later, and replace the deterministic router with a router agent later.
 4. **Evidence-first answers.** The response envelope keeps citations, reasoning, tools used, agent used, confidence, and thread id.
@@ -24,7 +25,8 @@ It is intentionally **thin but runnable**:
 ├── AGENTS.md                       # repo-wide orchestration policy
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   ├── DECISIONS.md                # short decision log
+│   ├── DECISIONS.md                # short decision log (15 entries)
+│   ├── GETTING_STARTED.md          # full setup guide: modes, env, tests
 │   ├── PROD_READINESS.md           # production gaps + completed work
 │   ├── compliance/
 │   │   └── hipaa-logging.md
@@ -35,6 +37,7 @@ It is intentionally **thin but runnable**:
 │   ├── FhirCopilot.Api/
 │   │   ├── Contracts/
 │   │   ├── Fhir/
+│   │   ├── Hubs/
 │   │   ├── Models/
 │   │   ├── Options/
 │   │   ├── Services/
@@ -48,54 +51,34 @@ It is intentionally **thin but runnable**:
 └── .env.example
 ```
 
-## First boot
+## Quick start
 
 ```bash
-# Stub mode (no API key needed)
+# Run with Local LLM (LM Studio on port 1234)
+Provider__Mode=Local \
+Provider__LocalEndpoint=http://localhost:1234/v1 \
+Provider__LocalModel=zai-org/glm-4.7-flash \
 dotnet run --project src/FhirCopilot.Api
 
-# Dev with Aspire dashboard (traces, metrics, logs)
-dotnet run --project src/FhirCopilot.AppHost
+# Run with Gemini (remote LLM)
+Provider__Mode=Gemini \
+GEMINI_API_KEY=your-key \
+dotnet run --project src/FhirCopilot.Api
 
-# Run tests
+# Run tests (no LLM or FHIR server needed)
 dotnet test
+
+# Aspire dashboard (traces, metrics, logs)
+dotnet run --project src/FhirCopilot.AppHost
 ```
 
-Health check:
+No built-in `IFhirBackend` ships — register your own implementation in `Program.cs`.
 
-```bash
-curl http://localhost:5075/health
-```
-
-Sync query:
-
-```bash
-curl -X POST http://localhost:5075/api/copilot \
-  -H "Content-Type: application/json" \
-  -d '{"query":"How many diabetic patients do we have?"}'
-```
-
-Streaming query:
-
-```bash
-curl -N "http://localhost:5075/api/copilot/stream?query=Clinical%20summary%20for%20patient-0001"
-```
-
-## Enable real Agent Framework calls
-
-Create a `.env` file at the repo root (see `.env.example`):
-
-```env
-Provider__Mode=Gemini
-GEMINI_API_KEY=your-key-here
-Provider__GeminiModel=gemini-3-flash-preview
-```
-
-The runner uses the Google GenerativeAI native SDK with Microsoft Agent Framework's `AIAgent` abstraction, function tools from `FhirToolbox`, and `AgentSession` per `(threadId, agent)` pair.
+See **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)** for the full guide: run modes, environment variables, test suite, and configuration reference.
 
 ## Immediate next steps
 
-1. Replace `SampleFhirBackend` with a Firely R4 client and capability registry.
+1. Add an `IFhirBackend` implementation (e.g., Firely SDK or raw `HttpClient`) and register it in `Program.cs`.
 2. Add durable session persistence instead of in-memory session storage.
 3. Replace `KeywordIntentRouter` with an LLM router agent plus deterministic fallback.
 4. Add structured evidence items instead of citation extraction from answer text.

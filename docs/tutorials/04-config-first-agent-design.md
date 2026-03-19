@@ -53,24 +53,15 @@ Every agent in this system is defined by a JSON file in
 ```csharp
 // src/FhirCopilot.Api/Models/AgentConfigModels.cs
 
-public sealed class AgentProfile
+public sealed record AgentProfile
 {
     public string Name { get; init; } = string.Empty;
     public string DisplayName { get; init; } = string.Empty;
     public string Purpose { get; init; } = string.Empty;
-    public string PreferredApi { get; init; } = "ChatCompletion";
-    public string[] AllowedTools { get; init; } = Array.Empty<string>();
-    public string[] Instructions { get; init; } = Array.Empty<string>();
-    public string[] DomainContext { get; init; } = Array.Empty<string>();
-    public ResponseContract ResponseContract { get; init; } = new();
-}
-
-public sealed class ResponseContract
-{
-    public bool AnswerFirst { get; init; } = true;
-    public bool IncludeCitations { get; init; } = true;
-    public bool IncludeReasoningSummary { get; init; } = true;
-    public string[] StructuredSections { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> AllowedTools { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Instructions { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> DomainContext { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> StructuredSections { get; init; } = Array.Empty<string>();
 }
 ```
 
@@ -81,7 +72,6 @@ The richest example is the clinical agent. Here is its full profile:
   "name": "clinical",
   "displayName": "Clinical",
   "purpose": "Multi-resource patient summaries and plain-English encounter narratives.",
-  "preferredApi": "ChatCompletion",
   "allowedTools": [
     "search_groups",
     "read_resource",
@@ -92,7 +82,6 @@ The richest example is the clinical agent. Here is its full profile:
     "search_conditions",
     "search_observations",
     "search_medications",
-    "search_procedures",
     "search_allergies",
     "calculator"
   ],
@@ -105,19 +94,14 @@ The richest example is the clinical agent. Here is its full profile:
     "Clinical answers may cross multiple resource types.",
     "Narrative synthesis is the primary goal."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Demographics",
-      "Conditions",
-      "Medications",
-      "Observations",
-      "Encounters",
-      "Allergies"
-    ]
-  }
+  "structuredSections": [
+    "Demographics",
+    "Conditions",
+    "Medications",
+    "Observations",
+    "Encounters",
+    "Allergies"
+  ]
 }
 ```
 
@@ -128,11 +112,10 @@ Each field has a clear purpose:
 | `name` | Routing key -- the string the router uses to dispatch to this agent |
 | `displayName` | Model-facing name used in the system prompt ("You are the Clinical agent...") |
 | `purpose` | One-sentence description injected into the prompt and useful for documentation |
-| `preferredApi` | Signal for which OpenAI API surface to use (ChatCompletion vs. Responses) |
-| `allowedTools` | Explicit subset of the 12 known tools this agent is permitted to call |
+| `allowedTools` | Explicit subset of the 11 known tools this agent is permitted to call |
 | `instructions` | Ordered behavioral rules, rendered as a numbered list in the system prompt |
 | `domainContext` | Background facts rendered as bullet points |
-| `responseContract` | Structural rules for the agent's output format |
+| `structuredSections` | Section headings the agent should use when formatting responses |
 
 Every piece of agent behavior lives in this file. No C# class needs to change
 when you want the clinical agent to "Include allergy severity in summaries" --
@@ -163,12 +146,12 @@ every agent gets every tool. Compare three agents side by side:
 ]
 ```
 
-**Clinical agent** -- all 12 tools:
+**Clinical agent** -- all 11 tools:
 ```json
 "allowedTools": [
     "search_groups", "read_resource", "list_resources", "bulk_export",
     "search_patients", "search_encounters", "search_conditions",
-    "search_observations", "search_medications", "search_procedures",
+    "search_observations", "search_medications",
     "search_allergies", "calculator"
 ]
 ```
@@ -180,37 +163,17 @@ public static IReadOnlyList<AIFunction> BuildTools(
     FhirToolbox toolbox,
     IEnumerable<string> allowedToolNames)
 {
-    var all = new Dictionary<string, AIFunction>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["search_groups"]       = AIFunctionFactory.Create(toolbox.SearchGroups),
-        ["read_resource"]       = AIFunctionFactory.Create(toolbox.ReadResource),
-        ["list_resources"]      = AIFunctionFactory.Create(toolbox.ListResources),
-        ["bulk_export"]         = AIFunctionFactory.Create(toolbox.BulkExport),
-        ["search_patients"]     = AIFunctionFactory.Create(toolbox.SearchPatients),
-        ["search_encounters"]   = AIFunctionFactory.Create(toolbox.SearchEncounters),
-        ["search_conditions"]   = AIFunctionFactory.Create(toolbox.SearchConditions),
-        ["search_observations"] = AIFunctionFactory.Create(toolbox.SearchObservations),
-        ["search_medications"]  = AIFunctionFactory.Create(toolbox.SearchMedications),
-        ["search_procedures"]   = AIFunctionFactory.Create(toolbox.SearchProcedures),
-        ["search_allergies"]    = AIFunctionFactory.Create(toolbox.SearchAllergies),
-        ["calculator"]          = AIFunctionFactory.Create(toolbox.Calculator)
-    };
+    var all = BuildAllTools(toolbox);
 
-    var selected = new List<AIFunction>();
-
-    foreach (var toolName in allowedToolNames.Distinct(StringComparer.OrdinalIgnoreCase))
-    {
-        if (all.TryGetValue(toolName, out var function))
-        {
-            selected.Add(function);
-        }
-    }
-
-    return selected;
+    return allowedToolNames
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Where(all.ContainsKey)
+        .Select(name => all[name])
+        .ToList();
 }
 ```
 
-The method builds the full dictionary of all 12 tools, then filters it to only
+The method builds the full dictionary of all 11 tools, then filters it to only
 the names listed in `allowedToolNames`. Tools not in the list are never passed
 to the model. An export agent literally cannot search conditions, even if the
 LLM generates a tool call for it, because that tool was never included in the
@@ -234,7 +197,11 @@ Routing is also configuration, not code. Here is `router.json`:
     "lookup": [
       "show me", "read", "what is", "who manages",
       "what insurance", "coverage for",
-      "patient/", "encounter/", "condition/"
+      "patient/", "patient-", "encounter/", "encounter-",
+      "condition/", "condition-", "observation/", "observation-",
+      "medicationrequest/", "medicationrequest-",
+      "procedure/", "procedure-",
+      "allergyintolerance/", "allergyintolerance-", "group/"
     ],
     "search": [
       "find patients", "search", "encounters for",
@@ -245,8 +212,9 @@ Routing is also configuration, not code. Here is `router.json`:
       "trend", "top", "volume", "ratio", "percentage"
     ],
     "clinical": [
-      "clinical summary", "summarize", "tell me about",
-      "what happened", "full summary", "plain english"
+      "clinical summary", "summary", "summarize",
+      "tell me about", "what happened",
+      "full summary", "plain english"
     ],
     "cohort": [
       "without", "who needs", "care gap", "gap", "at risk",
@@ -289,28 +257,18 @@ Here is the method that catches configuration errors before any request is
 served:
 
 ```csharp
-private static readonly HashSet<string> KnownToolNames =
-    new(StringComparer.OrdinalIgnoreCase)
-{
-    "search_groups", "read_resource", "list_resources", "bulk_export",
-    "search_patients", "search_encounters", "search_conditions",
-    "search_observations", "search_medications", "search_procedures",
-    "search_allergies", "calculator"
-};
-
-public static void ValidateProfiles(IAgentProfileStore profileStore, ILogger logger)
+public static void ValidateProfiles(
+    IAgentProfileStore profileStore,
+    ILogger logger)
 {
     foreach (var (agentName, profile) in profileStore.GetAllAgents())
     {
-        foreach (var toolName in profile.AllowedTools)
+        foreach (var toolName in profile.AllowedTools.Where(t => !KnownToolNames.Contains(t)))
         {
-            if (!KnownToolNames.Contains(toolName))
-            {
-                logger.LogWarning(
-                    "Agent profile '{AgentName}' references unknown tool '{ToolName}'"
-                    + " -- this tool will be silently ignored at runtime",
-                    agentName, toolName);
-            }
+            logger.LogWarning(
+                "Agent profile '{AgentName}' references unknown tool '{ToolName}'"
+                + " -- this tool will be silently ignored at runtime",
+                agentName, toolName);
         }
     }
 }
@@ -332,8 +290,9 @@ The validation logic is straightforward:
 
 1. Load every agent profile from disk.
 2. For each profile, iterate through its `allowedTools` array.
-3. Check every tool name against the `KnownToolNames` set (the 12 canonical
-   tool names).
+3. Check every tool name against the static `KnownToolNames` set (the 11
+   canonical tool names). This set is maintained alongside `BuildAllTools` —
+   both live in `ToolRegistry` as the single source of truth.
 4. If a tool name is not recognized, log a warning with the agent name and the
    offending tool name.
 
@@ -373,7 +332,7 @@ public static class PromptComposer
         builder.AppendLine($"Purpose: {profile.Purpose}");
         builder.AppendLine();
 
-        if (profile.DomainContext.Length > 0)
+        if (profile.DomainContext.Count > 0)
         {
             builder.AppendLine("Domain context:");
             foreach (var line in profile.DomainContext)
@@ -383,10 +342,10 @@ public static class PromptComposer
             builder.AppendLine();
         }
 
-        if (profile.Instructions.Length > 0)
+        if (profile.Instructions.Count > 0)
         {
             builder.AppendLine("Operating instructions:");
-            for (var index = 0; index < profile.Instructions.Length; index++)
+            for (var index = 0; index < profile.Instructions.Count; index++)
             {
                 builder.AppendLine($"{index + 1}. {profile.Instructions[index]}");
             }
@@ -394,20 +353,14 @@ public static class PromptComposer
         }
 
         builder.AppendLine("Response contract:");
-        builder.AppendLine(profile.ResponseContract.AnswerFirst
-            ? "- Lead with the direct answer."
-            : "- Do not force answer-first output.");
-        builder.AppendLine(profile.ResponseContract.IncludeCitations
-            ? "- Include resource citations when evidence is available."
-            : "- Citations are optional.");
-        builder.AppendLine(profile.ResponseContract.IncludeReasoningSummary
-            ? "- Include a short reasoning summary."
-            : "- Do not emit a reasoning summary unless needed.");
+        builder.AppendLine("- Lead with the direct answer.");
+        builder.AppendLine("- Include resource citations when evidence is available.");
+        builder.AppendLine("- Include a short reasoning summary.");
 
-        if (profile.ResponseContract.StructuredSections.Length > 0)
+        if (profile.StructuredSections.Count > 0)
         {
             builder.AppendLine("- Use these sections when relevant:");
-            foreach (var section in profile.ResponseContract.StructuredSections)
+            foreach (var section in profile.StructuredSections)
             {
                 builder.AppendLine($"  - {section}");
             }
@@ -573,10 +526,10 @@ trigger bulk exports?" is a simple search across JSON files for
 `"bulk_export"`. The answer is immediately obvious: clinical and export. Not
 lookup, not cohort. No code tracing needed.
 
-**A/B testing prompts requires only file changes.** To test whether "lead with
-the answer" or "start with reasoning" produces better clinical summaries, you
-change `answerFirst` from `true` to `false` in the JSON file. The code path
-is identical; only the config differs.
+**A/B testing prompts requires only file changes.** To test whether a different
+section structure produces better clinical summaries, you change the
+`structuredSections` array in the JSON file. The code path is identical; only
+the config differs.
 
 ---
 

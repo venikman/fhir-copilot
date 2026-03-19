@@ -8,7 +8,6 @@
     "search_conditions",
     "search_observations",
     "search_medications",
-    "search_procedures",
     "search_allergies",
     "list_resources",
     "calculator",
@@ -23,15 +22,10 @@
     "Cohort differs from search because it combines multiple resource types or negative conditions.",
     "Care gap logic should be deterministic wherever possible."
   ],
-  "responseContract": {
-    "answerFirst": true,
-    "includeCitations": true,
-    "includeReasoningSummary": true,
-    "structuredSections": [
-      "Population",
-      "Criteria",
-      "Gap or risk signal",
-      "Evidence"
-    ]
-  }
+  "structuredSections": [
+    "Population",
+    "Criteria",
+    "Gap or risk signal",
+    "Evidence"
+  ]
 }

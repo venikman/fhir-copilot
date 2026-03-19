@@ -8,14 +8,6 @@ public sealed record AgentProfile
     public IReadOnlyList<string> AllowedTools { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Instructions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> DomainContext { get; init; } = Array.Empty<string>();
-    public ResponseContract ResponseContract { get; init; } = new();
-}
-
-public sealed record ResponseContract
-{
-    public bool AnswerFirst { get; init; } = true;
-    public bool IncludeCitations { get; init; } = true;
-    public bool IncludeReasoningSummary { get; init; } = true;
     public IReadOnlyList<string> StructuredSections { get; init; } = Array.Empty<string>();
 }
 

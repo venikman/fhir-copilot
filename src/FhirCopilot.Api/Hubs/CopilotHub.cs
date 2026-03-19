@@ -27,7 +27,7 @@ public sealed class CopilotHub : Hub
         {
             return await _copilot.RunAsync(request, cancellationToken);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or System.ClientModel.ClientResultException)
         {
             throw new HubException($"upstream_error: {ex.Message}");
         }
@@ -69,7 +69,7 @@ public sealed class CopilotHub : Hub
                 {
                     moved = await enumerator.MoveNextAsync();
                 }
-                catch (HttpRequestException ex)
+                catch (Exception ex) when (ex is HttpRequestException or System.ClientModel.ClientResultException)
                 {
                     throw new HubException($"upstream_error: {ex.Message}");
                 }
@@ -80,6 +80,11 @@ public sealed class CopilotHub : Hub
                 catch (ArgumentException ex)
                 {
                     throw new HubException($"invalid_request: {ex.Message}");
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _logger.LogError(ex, "Unexpected error in StreamQuery");
+                    throw new HubException("internal_error: An unexpected error occurred.");
                 }
 
                 if (!moved) break;
