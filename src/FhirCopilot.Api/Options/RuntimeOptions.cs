@@ -11,6 +11,11 @@ public sealed class ProviderOptions
     public string? GeminiModel { get; set; } = "gemini-3-flash-preview";
     public List<string>? GeminiModels { get; set; }
     public string? FhirBaseUrl { get; set; }
+    public string? LocalEndpoint { get; set; } = "http://localhost:1234";
+    public string? LocalModel { get; set; } = "zai-org/glm-4.7-flash";
+
+    public bool IsLocalMode =>
+        string.Equals(Mode, "Local", StringComparison.OrdinalIgnoreCase);
 
     private readonly Lazy<string?> _geminiApiKey = new(() => Environment.GetEnvironmentVariable("GEMINI_API_KEY"));
 

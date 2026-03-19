@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
+using FhirCopilot.Api.Hubs;
 using FhirCopilot.Api.Options;
 using FhirCopilot.Api.Services;
 
@@ -69,9 +70,14 @@ if (providerConfig.IsGeminiMode)
 {
     builder.Services.AddSingleton<IAgentRunner, GeminiAgentFrameworkRunner>();
 }
+else if (providerConfig.IsLocalMode)
+{
+    builder.Services.AddSingleton<IAgentRunner, OpenAiCompatibleAgentRunner>();
+}
 else
 {
-    builder.Services.AddSingleton<IAgentRunner, StubAgentRunner>();
+    throw new InvalidOperationException(
+        $"Provider:Mode '{providerConfig.Mode}' is not supported. Use 'Gemini' or 'Local'.");
 }
 
 builder.Services.AddSingleton<ICopilotService, CopilotService>();
@@ -81,6 +87,13 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.WriteIndented = true;
 });
 
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.PayloadSerializerOptions.WriteIndented = false;
+    });
+
 var app = builder.Build();
 
 // Validate agent tool configs at startup to catch typos early
@@ -89,6 +102,8 @@ ToolRegistry.ValidateProfiles(
     app.Services.GetRequiredService<ILogger<Program>>());
 
 app.MapDefaultEndpoints();
+
+app.MapHub<CopilotHub>("/hubs/copilot");
 
 app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is running. See /health or /api/copilot."));
 

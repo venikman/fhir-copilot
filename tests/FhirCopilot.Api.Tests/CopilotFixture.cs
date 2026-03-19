@@ -1,5 +1,7 @@
+using FhirCopilot.Api.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace FhirCopilot.Api.Tests;
@@ -14,8 +16,9 @@ public class CopilotFixture : IClassFixture<CopilotFixture.StubFactory>
     }
 
     /// <summary>
-    /// Forces SampleFhirBackend + StubAgentRunner regardless of appsettings.json
-    /// by clearing FhirBaseUrl and GEMINI_API_KEY.
+    /// Forces SampleFhirBackend + StubAgentRunner regardless of appsettings.json.
+    /// Uses Mode=Local to pass the startup mode validation, then overrides the runner
+    /// via DI so tests run deterministically without a real LLM.
     /// </summary>
     public class StubFactory : WebApplicationFactory<Program>
     {
@@ -26,8 +29,12 @@ public class CopilotFixture : IClassFixture<CopilotFixture.StubFactory>
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Provider:FhirBaseUrl"] = "",
-                    ["Provider:Mode"] = "Stub",
+                    ["Provider:Mode"] = "Local",
                 });
+            });
+            builder.ConfigureServices(services =>
+            {
+                services.AddSingleton<IAgentRunner, StubAgentRunner>();
             });
 
             return base.CreateHost(builder);

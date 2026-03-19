@@ -59,6 +59,7 @@ public static class Extensions
                     .AddSource("FhirCopilot.Agent")
                     .AddSource("Microsoft.Extensions.AI")
                     .AddSource("Microsoft.Agents.AI")
+                    .AddSource("Microsoft.AspNetCore.SignalR")
                     .AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation();
             });
