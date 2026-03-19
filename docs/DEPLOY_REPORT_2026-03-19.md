@@ -2,7 +2,7 @@
 
 ## Summary
 
-Five unpushed commits consolidate the copilot transport from HTTP REST + SSE + SignalR down to **SignalR-only**. This is a **breaking change** for any client using the HTTP endpoints.
+Seven unpushed commits consolidate the copilot transport from HTTP REST + SSE + SignalR down to **SignalR-only**, extract shared agent lifecycle into `AgentRunnerBase`, and remove stubs and legacy tests. This is a **breaking change** for any client using the HTTP endpoints.
 
 ## Commits (oldest → newest)
 
@@ -13,6 +13,8 @@ Five unpushed commits consolidate the copilot transport from HTTP REST + SSE + S
 | `bfc2072` | refactor: remove CopilotError/CopilotErrorResponse — unused after endpoint removal | No — internal |
 | `ead3011` | docs: update architecture and tutorials for SignalR-only transport | No — docs only |
 | `fa8aa5c` | test: port error-handling tests from HTTP to SignalR hub | No — tests only |
+| `7473bad` | docs: add deployment impact report for SignalR-only transport | No — docs only |
+| `05fdd05` | refactor: extract AgentRunnerBase, simplify FHIR backend, remove stubs and legacy tests | No — internal |
 
 ## What Was Removed
 
@@ -22,6 +24,8 @@ Five unpushed commits consolidate the copilot transport from HTTP REST + SSE + S
 | `POST /api/copilot/stream` | SSE streaming response | **Removed** → 404 |
 | `SseWriter.cs` | SSE framing utility | **Deleted** |
 | `CopilotError` / `CopilotErrorResponse` | REST error envelope records | **Deleted** |
+| `StubAgentRunner.cs` | Stub-based offline runner | **Deleted** |
+| `SampleFhirBackend.cs` | In-memory sample data backend | **Deleted** |
 
 ## What Is Unchanged
 
@@ -32,7 +36,7 @@ Five unpushed commits consolidate the copilot transport from HTTP REST + SSE + S
 | `GET /alive` | Unchanged |
 | `/hubs/copilot` (SignalR) | Unchanged — `SendQuery` + `StreamQuery` |
 | `Dockerfile` | Unchanged |
-| `fly.toml` | Unchanged |
+| `fly.toml` | Added explicit HTTP health check on `/health` |
 | OTEL / tracing | Unchanged |
 | Model fallback chain | Unchanged |
 
