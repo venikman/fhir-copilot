@@ -1,85 +1,104 @@
 using System.Net;
-using System.Net.Http.Json;
+using System.Text.Json;
 using FhirCopilot.Api.Contracts;
+using FhirCopilot.Api.Fhir;
 using FhirCopilot.Api.Models;
 using FhirCopilot.Api.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace FhirCopilot.Api.Tests;
 
-public class ErrorHandlingTests : IDisposable
+public class ErrorHandlingTests : IAsyncLifetime
 {
-    private readonly List<WebApplicationFactory<Program>> _factories = [];
+    private WebApplicationFactory<Program>? _factory;
+    private HubConnection? _hub;
 
-    private HttpClient CreateClientWithRunner<TRunner>() where TRunner : class, IAgentRunner
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
-        var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(builder =>
+        if (_hub is not null)
+            await _hub.DisposeAsync();
+        _factory?.Dispose();
+    }
+
+    private async Task<HubConnection> CreateHubWithRunner<TRunner>() where TRunner : class, IAgentRunner
+    {
+        _factory = new ThrowingRunnerFactory<TRunner>();
+
+        _hub = new HubConnectionBuilder()
+            .WithUrl("http://localhost/hubs/copilot",
+                options => options.HttpMessageHandlerFactory = _ => _factory.Server.CreateHandler())
+            .AddJsonProtocol(options =>
+                options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+            .Build();
+
+        await _hub.StartAsync();
+        return _hub;
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task SendQuery_throws_HubException_on_upstream_error()
+    {
+        var hub = await CreateHubWithRunner<UpstreamErrorRunner>();
+        var ex = await Assert.ThrowsAsync<HubException>(
+            () => hub.InvokeAsync<CopilotResponse>("SendQuery", new CopilotRequest("test query")));
+        Assert.Contains("upstream_error:", ex.Message);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task SendQuery_throws_HubException_on_timeout()
+    {
+        var hub = await CreateHubWithRunner<TimeoutRunner>();
+        var ex = await Assert.ThrowsAsync<HubException>(
+            () => hub.InvokeAsync<CopilotResponse>("SendQuery", new CopilotRequest("test query")));
+        Assert.Contains("timeout:", ex.Message);
+    }
+
+    [Fact(Timeout = 10_000)]
+    public async Task SendQuery_throws_HubException_on_unexpected_error()
+    {
+        var hub = await CreateHubWithRunner<InternalErrorRunner>();
+        var ex = await Assert.ThrowsAsync<HubException>(
+            () => hub.InvokeAsync<CopilotResponse>("SendQuery", new CopilotRequest("test query")));
+        Assert.Contains("internal_error:", ex.Message);
+        Assert.DoesNotContain("secret", ex.Message);
+    }
+
+    // Factory that replaces the agent runner and enables detailed SignalR errors.
+    private sealed class ThrowingRunnerFactory<TRunner> : WebApplicationFactory<Program>
+        where TRunner : class, IAgentRunner
+    {
+        protected override IHost CreateHost(IHostBuilder builder)
+        {
+            builder.ConfigureHostConfiguration(config =>
             {
-                builder.ConfigureServices(services =>
+                config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IAgentRunner));
-                    if (descriptor != null) services.Remove(descriptor);
-                    services.AddSingleton<IAgentRunner, TRunner>();
-                });
-                builder.ConfigureAppConfiguration((_, config) =>
-                {
-                    config.AddInMemoryCollection(new Dictionary<string, string?>
-                    {
-                        ["Provider:Mode"] = "Stub",
-                        ["Provider:FhirBaseUrl"] = "",
-                    });
+                    ["Provider:Mode"] = "Local",
+                    ["Provider:FhirBaseUrl"] = "https://bulk-fhir.fly.dev/fhir",
                 });
             });
-        _factories.Add(factory);
-        return factory.CreateClient();
-    }
+            builder.ConfigureServices(services =>
+            {
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IAgentRunner));
+                if (descriptor != null) services.Remove(descriptor);
+                services.AddSingleton<IAgentRunner, TRunner>();
 
-    public void Dispose()
-    {
-        foreach (var factory in _factories)
-            factory.Dispose();
-    }
+                var fhirDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IFhirBackend));
+                if (fhirDescriptor != null) services.Remove(fhirDescriptor);
+                services.AddSingleton<IFhirBackend, NullFhirBackend>();
 
-    [Fact]
-    public async Task Post_copilot_returns_502_on_HttpRequestException()
-    {
-        using var client = CreateClientWithRunner<UpstreamErrorRunner>();
-        var response = await client.PostAsJsonAsync("/api/copilot", new CopilotRequest("test query"));
-
-        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<CopilotErrorResponse>();
-        Assert.NotNull(body);
-        Assert.Equal("upstream_error", body!.Error.Type);
-        Assert.DoesNotContain("StackTrace", body.Error.Message);
-    }
-
-    [Fact]
-    public async Task Post_copilot_returns_504_on_TaskCanceledException()
-    {
-        using var client = CreateClientWithRunner<TimeoutRunner>();
-        var response = await client.PostAsJsonAsync("/api/copilot", new CopilotRequest("test query"));
-
-        Assert.Equal(HttpStatusCode.GatewayTimeout, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<CopilotErrorResponse>();
-        Assert.NotNull(body);
-        Assert.Equal("timeout", body!.Error.Type);
-    }
-
-    [Fact]
-    public async Task Post_copilot_returns_500_on_unexpected_exception()
-    {
-        using var client = CreateClientWithRunner<InternalErrorRunner>();
-        var response = await client.PostAsJsonAsync("/api/copilot", new CopilotRequest("test query"));
-
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<CopilotErrorResponse>();
-        Assert.NotNull(body);
-        Assert.Equal("internal_error", body!.Error.Type);
-        Assert.DoesNotContain("secret", body.Error.Message);
+                services.PostConfigure<Microsoft.AspNetCore.SignalR.HubOptions>(options =>
+                    options.EnableDetailedErrors = true);
+            });
+            return base.CreateHost(builder);
+        }
     }
 
     // --- Throwing IAgentRunner stubs ---
