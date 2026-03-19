@@ -65,18 +65,14 @@ builder.Services.AddSingleton<IFhirBackend>(sp =>
 builder.Services.AddSingleton<FhirToolbox>();
 
 if (providerConfig.IsGeminiMode)
-{
-    builder.Services.AddSingleton<IAgentRunner, GeminiAgentFrameworkRunner>();
-}
+    builder.Services.AddSingleton<IChatClientFactory, GeminiChatClientFactory>();
 else if (providerConfig.IsLocalMode)
-{
-    builder.Services.AddSingleton<IAgentRunner, OpenAiCompatibleAgentRunner>();
-}
+    builder.Services.AddSingleton<IChatClientFactory, LocalChatClientFactory>();
 else
-{
     throw new InvalidOperationException(
         $"Provider:Mode '{providerConfig.Mode}' is not supported. Use 'Gemini' or 'Local'.");
-}
+
+builder.Services.AddSingleton<IAgentRunner, AgentRunner>();
 
 builder.Services.AddSingleton<ICopilotService, CopilotService>();
 builder.Services.ConfigureHttpJsonOptions(options =>

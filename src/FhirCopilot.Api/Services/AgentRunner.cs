@@ -6,14 +6,12 @@ using System.Text;
 using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
 using FhirCopilot.Api.Models;
-using FhirCopilot.Api.Options;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 
 namespace FhirCopilot.Api.Services;
 
-public abstract class AgentRunnerBase : IAgentRunner
+public sealed class AgentRunner : IAgentRunner
 {
     private const int MaxSessions = 200;
 
@@ -30,31 +28,24 @@ public abstract class AgentRunnerBase : IAgentRunner
 
     private sealed record SessionEntry(AgentSession Session, DateTime LastUsed);
 
-    protected ProviderOptions Provider { get; }
-    protected FhirToolbox Toolbox { get; }
-    protected ILogger Logger { get; }
+    private readonly IChatClientFactory _clientFactory;
+    private readonly FhirToolbox _toolbox;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger _logger;
 
-    protected AgentRunnerBase(IOptions<ProviderOptions> providerOptions, FhirToolbox toolbox, ILogger logger)
+    public AgentRunner(IChatClientFactory clientFactory, FhirToolbox toolbox, ILoggerFactory loggerFactory)
     {
-        Provider = providerOptions.Value;
-        Toolbox = toolbox;
-        Logger = logger;
+        _clientFactory = clientFactory;
+        _toolbox = toolbox;
+        _loggerFactory = loggerFactory;
+        _logger = loggerFactory.CreateLogger<AgentRunner>();
     }
-
-    /// <summary>Creates an IChatClient for the given model name.</summary>
-    protected abstract IChatClient CreateChatClient(string model);
-
-    /// <summary>Returns the ordered list of models to attempt (fallback chain).</summary>
-    protected abstract IReadOnlyList<string> ResolveModels();
-
-    /// <summary>Human-readable backend name used in response reasoning lines.</summary>
-    protected abstract string BackendDescription { get; }
 
     public async Task<CopilotResponse> RunAsync(AgentProfile profile, string query, string threadId, CancellationToken cancellationToken)
     {
-        Logger.LogInformation("RunAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
+        _logger.LogInformation("RunAsync started for agent {AgentName}, thread {ThreadId}", profile.Name, threadId);
 
-        var models = ResolveModels();
+        var models = _clientFactory.ModelChain;
         HttpRequestException? lastException = null;
 
         foreach (var model in models)
@@ -76,14 +67,14 @@ public abstract class AgentRunnerBase : IAgentRunner
 
                 var answer = answerBuilder.ToString().Trim();
                 Activity.Current?.SetTag("copilot.model", model);
-                Logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
+                _logger.LogInformation("RunAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
                     profile.Name, threadId, model, answer.Length);
                 return BuildResponse(answer, profile, threadId);
             }
             catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 lastException = ex;
-                Logger.LogWarning("Model {Model} rate-limited (429), falling back to next model", model);
+                _logger.LogWarning("Model {Model} rate-limited (429), falling back to next model", model);
             }
         }
 
@@ -96,7 +87,7 @@ public abstract class AgentRunnerBase : IAgentRunner
         string threadId,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var models = ResolveModels();
+        var models = _clientFactory.ModelChain;
         HttpRequestException? lastException = null;
 
         yield return CopilotStreamEvent.Meta(profile.Name, threadId, isStub: false);
@@ -106,7 +97,7 @@ public abstract class AgentRunnerBase : IAgentRunner
             var succeeded = false;
             var answerBuilder = new StringBuilder();
 
-            Logger.LogInformation("StreamAsync attempting model {Model} for agent {AgentName}, thread {ThreadId}",
+            _logger.LogInformation("StreamAsync attempting model {Model} for agent {AgentName}, thread {ThreadId}",
                 model, profile.Name, threadId);
 
             var agent = GetOrCreateAgent(profile, model);
@@ -127,7 +118,7 @@ public abstract class AgentRunnerBase : IAgentRunner
                     catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
                     {
                         lastException = ex;
-                        Logger.LogWarning("Model {Model} rate-limited (429) during stream, falling back to next model", model);
+                        _logger.LogWarning("Model {Model} rate-limited (429) during stream, falling back to next model", model);
                         break;
                     }
 
@@ -149,7 +140,7 @@ public abstract class AgentRunnerBase : IAgentRunner
             {
                 var answer = answerBuilder.ToString().Trim();
                 Activity.Current?.SetTag("copilot.model", model);
-                Logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
+                _logger.LogInformation("StreamAsync completed for agent {AgentName}, thread {ThreadId}, model {Model}, answer length {AnswerLength}",
                     profile.Name, threadId, model, answer.Length);
                 yield return CopilotStreamEvent.Done(BuildResponse(answer, profile, threadId));
                 yield break;
@@ -168,7 +159,7 @@ public abstract class AgentRunnerBase : IAgentRunner
             [
                 $"Routed to {profile.Name}.",
                 $"Loaded runtime profile '{profile.Name}' from file-backed configuration.",
-                $"Executed Agent Framework streaming run over the {BackendDescription}."
+                $"Executed Agent Framework streaming run over the {_clientFactory.Description}."
             ],
             Array.Empty<string>(),
             profile.Name,
@@ -183,10 +174,11 @@ public abstract class AgentRunnerBase : IAgentRunner
         return _agents.GetOrAdd(cacheKey, _ =>
         {
             var instructions = PromptComposer.Compose(profile);
-            var tools = ToolRegistry.BuildTools(Toolbox, profile.AllowedTools);
+            var tools = ToolRegistry.BuildTools(_toolbox, profile.AllowedTools);
 
-            var chatClient = CreateChatClient(model)
+            var chatClient = _clientFactory.Create(model)
                 .AsBuilder()
+                .UseLogging(_loggerFactory)
                 .UseOpenTelemetry(sourceName: "FhirCopilot.GenAI")
                 .Build();
             return chatClient.AsAIAgent(
@@ -227,7 +219,7 @@ public abstract class AgentRunnerBase : IAgentRunner
                 SessionsEvicted.Add(keysToRemove.Count);
                 SessionsActive.Add(-keysToRemove.Count);
 
-                Logger.LogInformation("Evicted {EvictedCount} session(s), {RemainingCount} remaining", keysToRemove.Count, _sessions.Count);
+                _logger.LogInformation("Evicted {EvictedCount} session(s), {RemainingCount} remaining", keysToRemove.Count, _sessions.Count);
             }
 
             var created = await agent.CreateSessionAsync();
@@ -236,7 +228,7 @@ public abstract class AgentRunnerBase : IAgentRunner
             SessionsCreated.Add(1);
             SessionsActive.Add(1);
 
-            Logger.LogDebug("Created new session for thread {ThreadId}, agent {AgentName}", threadId, agentName);
+            _logger.LogDebug("Created new session for thread {ThreadId}, agent {AgentName}", threadId, agentName);
             return created;
         }
         finally
