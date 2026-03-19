@@ -64,7 +64,10 @@ public static class PromptComposer
 
         builder.AppendLine("Response contract:");
         builder.AppendLine("- Lead with the direct answer.");
-        builder.AppendLine("- Include resource citations when evidence is available.");
+        builder.AppendLine("- Cite resource IDs (e.g. Patient/patient-0001) for traceability.");
+        builder.AppendLine("- Show reference chains when resolving (e.g. Patient -> Practitioner -> Organization).");
+        builder.AppendLine("- Format tables for directory/comparison queries.");
+        builder.AppendLine("- Direct answer first for yes/no questions, then evidence.");
         builder.AppendLine("- Include a short reasoning summary.");
 
         if (profile.StructuredSections.Count > 0)

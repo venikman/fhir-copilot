@@ -44,4 +44,15 @@ public class PromptComposerTests
         Assert.Contains("CPT", prompt);
         Assert.Contains("4548-4", prompt);  // HbA1c LOINC code
     }
+
+    [Fact]
+    public void Composed_prompt_contains_response_guidelines()
+    {
+        var prompt = PromptComposer.Compose(MakeProfile());
+
+        Assert.Contains("Cite resource IDs", prompt);
+        Assert.Contains("reference chains", prompt);
+        Assert.Contains("tables", prompt);
+        Assert.Contains("Never dump raw JSON", prompt);
+    }
 }
