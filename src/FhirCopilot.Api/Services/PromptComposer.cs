@@ -5,12 +5,30 @@ namespace FhirCopilot.Api.Services;
 
 public static class PromptComposer
 {
+    private const string FhirDataModel = """
+        FHIR Data Model:
+        - Group — Attribution lists. Contains member references -> Patient.
+        - Patient — Demographics, address. Has generalPractitioner -> PractitionerRole, managingOrganization -> Organization.
+        - Practitioner — Providers (doctors, nurses). Name, NPI, qualifications.
+        - PractitionerRole — Links Practitioner -> Organization + specialty + location.
+        - Organization — Clinics, hospitals, payers. Name, address, type.
+        - Coverage — Insurance. payor -> Organization, beneficiary -> Patient, period, status.
+        - Encounter — Visits. subject -> Patient, participant -> Practitioner, type (CPT), reasonCode (ICD-10), location, period, status.
+        - Condition — Diagnoses. subject -> Patient, code (ICD-10), clinicalStatus, category.
+        - Observation — Labs & vitals. subject -> Patient, code (LOINC), valueQuantity, effectiveDateTime, category.
+        - MedicationRequest — Prescriptions. subject -> Patient, medicationCodeableConcept (RxNorm), status, authoredOn.
+        - Procedure — Performed procedures. subject -> Patient, code (CPT), status, performedDateTime.
+        - AllergyIntolerance — Allergies. patient -> Patient, code, clinicalStatus, criticality.
+        """;
+
     public static string Compose(AgentProfile profile)
     {
         var builder = new StringBuilder();
 
         builder.AppendLine($"You are the {profile.DisplayName} agent for a provider-population copilot working over FHIR R4.");
         builder.AppendLine($"Purpose: {profile.Purpose}");
+        builder.AppendLine();
+        builder.AppendLine(FhirDataModel);
         builder.AppendLine();
 
         if (profile.DomainContext.Count > 0)
