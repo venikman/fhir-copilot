@@ -81,6 +81,18 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.WriteIndented = true;
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("https://orc-demo-guide.pages.dev")
+            .SetIsOriginAllowedToAllowWildcardSubdomains()
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
 builder.Services.AddSignalR()
     .AddJsonProtocol(options =>
     {
@@ -96,6 +108,8 @@ ToolRegistry.ValidateProfiles(
     app.Services.GetRequiredService<ILogger<Program>>());
 
 app.MapDefaultEndpoints();
+
+app.UseCors();
 
 app.MapHub<CopilotHub>("/hubs/copilot");
 
