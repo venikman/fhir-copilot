@@ -31,4 +31,17 @@ public class PromptComposerTests
         Assert.Contains("AllergyIntolerance", prompt);
         Assert.Contains("Coverage", prompt);
     }
+
+    [Fact]
+    public void Composed_prompt_contains_code_systems()
+    {
+        var prompt = PromptComposer.Compose(MakeProfile());
+
+        Assert.Contains("Code Systems", prompt);
+        Assert.Contains("ICD-10", prompt);
+        Assert.Contains("LOINC", prompt);
+        Assert.Contains("RxNorm", prompt);
+        Assert.Contains("CPT", prompt);
+        Assert.Contains("4548-4", prompt);  // HbA1c LOINC code
+    }
 }

@@ -21,6 +21,14 @@ public static class PromptComposer
         - AllergyIntolerance — Allergies. patient -> Patient, code, clinicalStatus, criticality.
         """;
 
+    private const string CodeSystems = """
+        Code Systems (use system|code format in searches):
+        - ICD-10-CM (diagnoses): E11.* (Type 2 diabetes), I10 (Hypertension), J06.9 (URI), M54.5 (Low back pain)
+        - CPT (procedures/encounters): 99213 (Office visit), 99385 (Preventive visit)
+        - LOINC (observations): 4548-4 (HbA1c), 2339-0 (Glucose), 8480-6 (Systolic BP), 8462-4 (Diastolic BP)
+        - RxNorm (medications): 860975 (Metformin), 310798 (Lisinopril), 197361 (Amlodipine)
+        """;
+
     public static string Compose(AgentProfile profile)
     {
         var builder = new StringBuilder();
@@ -29,6 +37,7 @@ public static class PromptComposer
         builder.AppendLine($"Purpose: {profile.Purpose}");
         builder.AppendLine();
         builder.AppendLine(FhirDataModel);
+        builder.AppendLine(CodeSystems);
         builder.AppendLine();
 
         if (profile.DomainContext.Count > 0)
