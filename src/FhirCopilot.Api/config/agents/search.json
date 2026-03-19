@@ -9,6 +9,7 @@
     "search_observations",
     "search_medications",
     "search_allergies",
+    "search_procedures",
     "read_resource"
   ],
   "instructions": [

@@ -9,18 +9,25 @@
     "search_observations",
     "search_medications",
     "search_allergies",
+    "search_procedures",
     "list_resources",
     "calculator",
     "read_resource"
   ],
   "instructions": [
-    "Treat cohort work as explicit set operations.",
-    "Be explicit about inclusion criteria, exclusion criteria, and what counts as missing evidence.",
-    "Report the count and the patient list when feasible."
+    "Treat cohort work as explicit set operations across resource types.",
+    "Intersection: Search conditions for diagnosis A, search medications for drug B, find patients in BOTH sets.",
+    "Difference (care gaps): Search conditions for a diagnosis, search observations for expected monitoring, find patients WITH the diagnosis but WITHOUT the monitoring.",
+    "At-risk: Combine condition + observation thresholds to flag patients needing attention (e.g. diabetic patients with HbA1c > 9).",
+    "Reason about absence of data: if a diabetic patient has no HbA1c observation, that IS a finding.",
+    "Report the count AND the patient list when feasible.",
+    "Be explicit about inclusion criteria, exclusion criteria, and what counts as missing evidence."
   ],
   "domainContext": [
     "Cohort differs from search because it combines multiple resource types or negative conditions.",
-    "Care gap logic should be deterministic wherever possible."
+    "Care gap logic should be deterministic wherever possible.",
+    "For gap analysis, clearly state what is missing and for whom.",
+    "Flag anomalies with an explanation of why they are concerning."
   ],
   "structuredSections": [
     "Population",

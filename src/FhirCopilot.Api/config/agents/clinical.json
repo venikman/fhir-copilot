@@ -13,6 +13,7 @@
     "search_observations",
     "search_medications",
     "search_allergies",
+    "search_procedures",
     "calculator"
   ],
   "instructions": [
