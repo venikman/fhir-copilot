@@ -1,4 +1,4 @@
-# Streaming Delta Reassembly: Proving SSE Chunks Exactly Reconstruct the Final Answer
+# Streaming Delta Reassembly: Proving SignalR StreamQuery Chunks Exactly Reconstruct the Final Answer
 
 Most streaming API test suites stop at "did I get events?" This codebase goes further: it proves that concatenating every `delta` chunk produces a string identical to the final `answer` in the `done` event. That single assertion catches an entire class of bugs that manual testing will never find.
 
@@ -8,7 +8,7 @@ This tutorial walks through how it works.
 
 ## 1. The Problem
 
-Server-Sent Events (SSE) streaming looks simple on the surface. The server chops a response into pieces, sends them one at a time, and the client glues them back together. What could go wrong?
+SignalR streaming looks simple on the surface. The server chops a response into pieces, sends them one at a time over a WebSocket, and the client glues them back together. What could go wrong?
 
 Quite a lot:
 
@@ -22,103 +22,110 @@ Most projects test "I received some delta events" and call it a day. The test in
 
 ---
 
-## 2. The Test: `Stream_delta_content_reassembles_to_full_answer`
+## 2. The Test: `StreamQuery_deltas_reassemble_to_answer`
 
-Here is the test, found in `tests/FhirCopilot.Api.Tests/StreamingTests.cs`:
+Here is the test, found in `tests/FhirCopilot.Api.Tests/SignalRHubTests.cs`:
 
 ```csharp
-[Fact]
-public async Task Stream_delta_content_reassembles_to_full_answer()
+[Fact(Timeout = 60_000)]
+public async Task StreamQuery_deltas_reassemble_to_answer()
 {
-    var response = await Client.PostAsJsonAsync("/api/copilot/stream",
-        new { query = "What insurance does patient-0001 have?", threadId = "stream-reassemble-1" });
+    await _hub.StartAsync();
 
-    response.EnsureSuccessStatusCode();
+    var events = await CollectStreamEventsAsync(
+        new CopilotRequest("What insurance does patient-0001 have?", "stream-reassemble-1"));
 
-    var body = await response.Content.ReadAsStringAsync();
-    var events = ParseSseEvents(body);
+    var reassembled = string.Concat(
+        events.Where(e => e.Type == "delta").Select(e => e.Content ?? ""));
 
-    // Reassemble deltas
-    var deltas = events
-        .Where(e => e.EventType == "delta")
-        .Select(e =>
-        {
-            var doc = JsonDocument.Parse(e.Data);
-            return doc.RootElement.GetProperty("content").GetString() ?? "";
-        });
-    var reassembled = string.Concat(deltas);
+    var done = events.Last(e => e.Type == "done");
+    Assert.NotNull(done.Response);
+    Assert.Equal(done.Response.Answer, reassembled);
+}
+```
 
-    // Get answer from done event
-    var done = events.Last(e => e.EventType == "done");
-    var doneDoc = JsonDocument.Parse(done.Data);
-    var fullAnswer = doneDoc.RootElement.GetProperty("response").GetProperty("answer").GetString();
+The `CollectStreamEventsAsync` helper drives SignalR's built-in `IAsyncEnumerable` streaming:
 
-    Assert.Equal(fullAnswer, reassembled);
+```csharp
+private async Task<List<CopilotStreamEvent>> CollectStreamEventsAsync(CopilotRequest request)
+{
+    var events = new List<CopilotStreamEvent>();
+
+    await foreach (var evt in _hub.StreamAsync<CopilotStreamEvent>("StreamQuery", request))
+    {
+        events.Add(evt);
+    }
+
+    return events;
 }
 ```
 
 Walk through it step by step:
 
-**Step 1: Send a query via the streaming endpoint.** The test POSTs to `/api/copilot/stream` with a natural-language question about a specific patient. The `threadId` is hardcoded per test to avoid cross-test interference.
+**Step 1: Connect and invoke `StreamQuery`.** The test starts a SignalR `HubConnection` against an in-memory `WebApplicationFactory` server. It calls `_hub.StreamAsync<CopilotStreamEvent>("StreamQuery", request)`, which opens a SignalR streaming channel to `CopilotHub.StreamQuery`.
 
-**Step 2: Read the entire SSE response body as a string.** Because this runs against `WebApplicationFactory` (an in-memory test server), the response completes fully before `ReadAsStringAsync` returns. In production, a real client would consume the stream incrementally.
+**Step 2: Collect all stream events.** The `await foreach` loop collects every `CopilotStreamEvent` yielded by the server until the stream completes. Because this runs against `WebApplicationFactory`, the full exchange completes without a real network socket.
 
-**Step 3: Parse all SSE frames.** The custom `ParseSseEvents` helper (covered in Section 4) splits the raw response into structured `SseEvent` records, each with an `EventType` and `Data` field.
+**Step 3: Extract and concatenate all delta content.** For every event with `Type == "delta"`, the test reads the `Content` field directly from the strongly-typed `CopilotStreamEvent` record. It then concatenates all of them with `string.Concat` — no separators, no trimming, no normalization.
 
-**Step 4: Extract and concatenate all delta content.** For every event with type `"delta"`, the test parses its JSON data and pulls out the `content` field. It then concatenates all of them with `string.Concat` -- no separators, no trimming, no normalization.
+**Step 4: Extract the full answer from the done event.** The last event of type `"done"` carries a `CopilotStreamEvent` with a populated `Response` field — the complete `CopilotResponse` with the authoritative final text.
 
-**Step 5: Extract the full answer from the done event.** The last event of type `"done"` contains a complete `CopilotResponse` object nested under `response`. The test navigates into `response.answer` to get the authoritative final text.
-
-**Step 6: Assert exact equality.** `Assert.Equal(fullAnswer, reassembled)` -- this is the heart of the test. If any character is missing, duplicated, trimmed, or reordered, this fails. There is no fuzzy matching, no "close enough."
+**Step 5: Assert exact equality.** `Assert.Equal(done.Response.Answer, reassembled)` — this is the heart of the test. If any character is missing, duplicated, trimmed, or reordered, this fails. There is no fuzzy matching, no "close enough."
 
 ---
 
-## 3. The SSE Protocol Implementation
+## 3. The SignalR Streaming Implementation
 
-The streaming endpoint lives in `src/FhirCopilot.Api/Program.cs`. Here is the full handler:
+The streaming hub method lives in `src/FhirCopilot.Api/Hubs/CopilotHub.cs`:
 
 ```csharp
-app.MapPost("/api/copilot/stream", async (
-    HttpContext httpContext,
+public async IAsyncEnumerable<CopilotStreamEvent> StreamQuery(
     CopilotRequest request,
-    ICopilotService service,
-    CancellationToken cancellationToken) =>
+    [EnumeratorCancellation] CancellationToken cancellationToken)
 {
-    httpContext.Response.StatusCode = StatusCodes.Status200OK;
-    httpContext.Response.Headers.ContentType = "text/event-stream";
-    httpContext.Response.Headers.CacheControl = "no-cache";
-    httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+    _logger.LogInformation("StreamQuery from connection {ConnectionId}, query length {Length}",
+        Context.ConnectionId, request.Query.Length);
+
+    var enumerator = _copilot.StreamAsync(request, cancellationToken)
+        .GetAsyncEnumerator(cancellationToken);
 
     try
     {
-        await foreach (var evt in service.StreamAsync(request, cancellationToken))
+        while (true)
         {
-            var payload = JsonSerializer.Serialize(evt, JsonDefaults.Serializer);
-            await httpContext.Response.WriteAsync($"event: {evt.Type}\ndata: {payload}\n\n", cancellationToken);
-            await httpContext.Response.Body.FlushAsync(cancellationToken);
+            bool moved;
+            try
+            {
+                moved = await enumerator.MoveNextAsync();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or System.ClientModel.ClientResultException)
+            {
+                throw new HubException($"upstream_error: {ex.Message}");
+            }
+            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new HubException("timeout: The request timed out. Please retry.");
+            }
+            catch (ArgumentException ex)
+            {
+                throw new HubException($"invalid_request: {ex.Message}");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogError(ex, "Unexpected error in StreamQuery");
+                throw new HubException("internal_error: An unexpected error occurred.");
+            }
+
+            if (!moved) break;
+            yield return enumerator.Current;
         }
     }
-    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+    finally
     {
-        // Client disconnected -- no action needed.
+        await enumerator.DisposeAsync();
     }
-    catch (Exception ex)
-    {
-        var errorEvt = CopilotStreamEvent.Error(ex.Message);
-        var errorPayload = JsonSerializer.Serialize(errorEvt, JsonDefaults.Serializer);
-        await httpContext.Response.WriteAsync($"event: error\ndata: {errorPayload}\n\n", CancellationToken.None);
-        await httpContext.Response.Body.FlushAsync(CancellationToken.None);
-    }
-});
+}
 ```
-
-### The SSE headers
-
-Three headers are set before any content is written:
-
-- **`Content-Type: text/event-stream`** -- This tells the browser (and any `EventSource` client) to treat the response as an SSE stream rather than buffering it as a regular HTTP response.
-- **`Cache-Control: no-cache`** -- Prevents proxies and CDNs from caching the response, which would defeat the purpose of real-time streaming.
-- **`X-Accel-Buffering: no`** -- This is an Nginx directive. When running behind Nginx as a reverse proxy, Nginx buffers responses by default. This header tells it to pass bytes through immediately.
 
 ### The event lifecycle
 
@@ -150,164 +157,38 @@ public sealed record CopilotStreamEvent(
 
 **`meta`** arrives first. It tells the client which agent was selected, what thread ID is in play, and whether this is a stub response. A UI client can use this to display "Thinking..." with the agent name before any content arrives.
 
-**`delta`** events carry text chunks in their `content` field. Each delta is a fragment of the final answer. The client appends them in order.
+**`delta`** events carry text chunks in their `Content` field. Each delta is a fragment of the final answer. The client appends them in order.
 
-**`done`** arrives last and carries the complete `CopilotResponse` -- the full answer text, citations, reasoning chain, tools used, confidence, and metadata. This is the authoritative final state. The client can replace whatever it accumulated from deltas with this canonical version.
+**`done`** arrives last and carries the complete `CopilotResponse` — the full answer text, citations, reasoning chain, tools used, confidence, and metadata. This is the authoritative final state. The client can replace whatever it accumulated from deltas with this canonical version.
 
-**`error`** is emitted if an exception occurs after headers have already been sent. At that point, the server cannot change the HTTP status code (it is already 200), so it signals the error in-band as an SSE event. Note how the `catch` block uses `CancellationToken.None` -- if the error happened because of a server-side failure (not a client disconnect), the server still needs to flush the error event.
+### Error handling in the streaming path
 
-### The write-and-flush pattern
+Unlike SSE — where the server cannot change the HTTP status code once streaming begins — SignalR streams can signal errors cleanly by throwing a `HubException`. The client receives the error message without needing an in-band error event type. The `[EnumeratorCancellation]` parameter ensures that when the SignalR connection is cancelled, the underlying `ICopilotService.StreamAsync` is also cancelled.
 
-Each event is written and then explicitly flushed:
-
-```csharp
-await httpContext.Response.WriteAsync($"event: {evt.Type}\ndata: {payload}\n\n", cancellationToken);
-await httpContext.Response.Body.FlushAsync(cancellationToken);
-```
-
-Without the flush, ASP.NET Core may buffer the output, and the client would receive events in unpredictable batches rather than one at a time.
-
----
-
-## 4. The `ParseSseEvents` Helper
-
-The test file includes a custom SSE parser. This is worth examining closely because it handles a subtlety that most SSE parsers miss:
-
-```csharp
-private static List<SseEvent> ParseSseEvents(string raw)
-{
-    var events = new List<SseEvent>();
-    var frames = raw.Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
-
-    foreach (var frame in frames)
-    {
-        string? eventType = null;
-        string? data = null;
-
-        var eventPrefix = "event: ";
-        var dataPrefix = "data: ";
-
-        var eventIdx = frame.IndexOf(eventPrefix, StringComparison.Ordinal);
-        var dataIdx = frame.IndexOf(dataPrefix, StringComparison.Ordinal);
-
-        if (eventIdx >= 0)
-        {
-            var endOfLine = frame.IndexOf('\n', eventIdx);
-            eventType = endOfLine >= 0
-                ? frame[(eventIdx + eventPrefix.Length)..endOfLine].Trim()
-                : frame[(eventIdx + eventPrefix.Length)..].Trim();
-        }
-
-        if (dataIdx >= 0)
-        {
-            data = frame[(dataIdx + dataPrefix.Length)..].Trim();
-        }
-
-        if (eventType is not null && data is not null)
-        {
-            events.Add(new SseEvent(eventType, data));
-        }
-    }
-
-    return events;
-}
-
-private sealed record SseEvent(string EventType, string Data);
-```
-
-### The multi-line JSON subtlety
-
-The server serializes events using `JsonDefaults.Serializer`, which has `WriteIndented = true`:
-
-```csharp
-var options = new JsonSerializerOptions
-{
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    WriteIndented = true,
-    // ...
-};
-```
-
-This means the JSON payload for a `done` event is not a single line. It looks something like:
-
-```
-event: done
-data: {
-  "type": "done",
-  "response": {
-    "answer": "...",
-    "citations": [ ... ]
-  }
-}
-```
-
-Per the SSE specification (RFC 8895 / W3C EventSource), each line of a multi-line data field should start with `data:`. In other words, a strictly compliant server would emit:
-
-```
-event: done
-data: {
-data:   "type": "done",
-data:   "response": {
-data:     "answer": "..."
-data:   }
-data: }
-```
-
-This server does not do that -- it writes the entire indented JSON block after a single `data: ` prefix. The parser handles this by taking everything from `data: ` to the end of the frame (the next `\n\n` boundary):
-
-```csharp
-if (dataIdx >= 0)
-{
-    data = frame[(dataIdx + dataPrefix.Length)..].Trim();
-}
-```
-
-This is technically non-compliant SSE, but it works in practice because:
-1. The test's custom parser expects this format.
-2. Browser `EventSource` APIs would not parse it correctly, but this endpoint is consumed by JavaScript `fetch` + manual parsing, not by `EventSource`.
-3. The `\n\n` double-newline frame separator is unambiguous -- the indented JSON will never contain a double-newline within a value (JSON encodes newlines as `\n` inside strings).
+The `try/catch` inside the `while (true)` loop is deliberate: it catches exceptions from `MoveNextAsync` (where the actual LLM or FHIR call happens) and wraps them in typed `HubException` messages before they propagate to the client.
 
 ---
 
 ## 5. The Chunking Strategy
 
-The `StubAgentRunner` in `src/FhirCopilot.Api/Services/StubAgentRunner.cs` shows how text gets split into delta events:
+The live runners (`GeminiAgentFrameworkRunner`, `OpenAiCompatibleAgentRunner`) emit real model tokens as they arrive from the LLM. Each token becomes a `delta` event. The chunking is inherent to the LLM's token stream — there is no artificial splitting.
+
+For testing, the `AgentRunnerBase` streams the agent's answer in fixed-size chunks. Here is the core pattern:
 
 ```csharp
-public async IAsyncEnumerable<CopilotStreamEvent> StreamAsync(
-    AgentProfile profile,
-    string query,
-    string threadId,
-    [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+foreach (var chunk in Chunk(plan.Answer, 120))
 {
-    var plan = await ExecuteAsync(profile.Name, query, cancellationToken);
-
-    yield return CopilotStreamEvent.Meta(profile.Name, threadId, isStub: true);
-
-    foreach (var chunk in Chunk(plan.Answer, 120))
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        yield return CopilotStreamEvent.Delta(chunk);
-        await Task.Delay(30, cancellationToken);
-    }
-
-    yield return CopilotStreamEvent.Done(new CopilotResponse(
-        plan.Answer,
-        plan.Citations,
-        plan.Reasoning,
-        plan.ToolsUsed,
-        profile.Name,
-        plan.Confidence,
-        threadId,
-        IsStub: true));
+    cancellationToken.ThrowIfCancellationRequested();
+    yield return CopilotStreamEvent.Delta(chunk);
 }
+
+yield return CopilotStreamEvent.Done(new CopilotResponse(
+    plan.Answer,
+    // ...
+));
 ```
 
-Three things to note here:
-
-**First**, the full answer is computed before any streaming begins (`ExecuteAsync` runs first). The deltas are synthetic -- they simulate streaming by chopping the already-known answer into pieces. This is the stub implementation used for testing and development. The live runner (`GeminiAgentFrameworkRunner`) emits real model tokens as they arrive from the LLM.
-
-**Second**, the `Chunk` method is a simple fixed-size splitter:
+The `Chunk` method is a simple fixed-size splitter:
 
 ```csharp
 private static IEnumerable<string> Chunk(string text, int size)
@@ -317,76 +198,92 @@ private static IEnumerable<string> Chunk(string text, int size)
 }
 ```
 
-It splits text into 120-character pieces. The last chunk gets whatever remains. There is no attempt to split on word boundaries -- this is deliberate. Splitting mid-word and mid-line is more realistic and more likely to expose bugs in consumer code that assumes chunks are "clean."
-
-**Third**, each chunk is followed by `Task.Delay(30, cancellationToken)` -- a 30-millisecond pause. This simulates the latency of token-by-token generation from an LLM. Without this delay, all chunks would arrive in a single TCP segment and the test would not exercise the streaming path realistically.
+It splits text into 120-character pieces. The last chunk gets whatever remains. There is no attempt to split on word boundaries — this is deliberate. Splitting mid-word and mid-line is more realistic and more likely to expose bugs in consumer code that assumes chunks are "clean."
 
 ### Why the reassembly test works
 
-Because `StreamAsync` uses `plan.Answer` as both the source for `Chunk()` and the `Answer` field of the `CopilotResponse` in the done event, the reassembly invariant holds by construction in the stub. But the test still has value: it verifies that no layer between the `StubAgentRunner` and the test client corrupts the data. The SSE framing, JSON serialization, HTTP transport, response buffering, and the test's own SSE parser all sit in that path. A bug in any of those layers would break reassembly.
+Because the runner uses `plan.Answer` as both the source for `Chunk()` and the `Answer` field of the `CopilotResponse` in the done event, the reassembly invariant holds by construction. But the test still has value: it verifies that no layer between the runner and the test client corrupts the data. The SignalR framing, JSON serialization, WebSocket transport, and the `CollectStreamEventsAsync` helper all sit in that path. A bug in any of those layers would break reassembly.
 
 ---
 
 ## 6. The Full Test Suite
 
-The `StreamingTests` class contains five tests. Each one targets a specific aspect of the SSE contract:
+The `SignalRHubTests` class contains six tests. Each one targets a specific aspect of the SignalR streaming contract:
 
-### `Stream_returns_sse_content_type`
-
-```csharp
-Assert.Equal("text/event-stream", response.Content.Headers.ContentType?.MediaType);
-```
-
-Verifies the response has the correct MIME type. Without this, browser-based SSE clients will reject the stream entirely.
-
-### `Stream_emits_meta_delta_done_events`
+### `Hub_connects_and_disconnects`
 
 ```csharp
-Assert.Equal("meta", events[0].EventType);
-Assert.Contains(events, e => e.EventType == "delta");
-Assert.Equal("done", events[^1].EventType);
+await _hub.StartAsync();
+Assert.Equal(HubConnectionState.Connected, _hub.State);
+await _hub.StopAsync();
+Assert.Equal(HubConnectionState.Disconnected, _hub.State);
 ```
 
-Verifies the event ordering contract: meta first, at least one delta in the middle, done last. This is the structural invariant that clients depend on for their state machines (show spinner -> append text -> finalize display).
+Verifies the hub can be connected to and cleanly disconnected. A failure here means the SignalR route is not registered or the server is not reachable.
 
-### `Stream_meta_event_contains_agent_and_thread`
+### `SendQuery_returns_response_from_real_llm`
 
 ```csharp
-Assert.True(doc.RootElement.TryGetProperty("agentType", out var agentType));
-Assert.False(string.IsNullOrWhiteSpace(agentType.GetString()));
-Assert.True(doc.RootElement.TryGetProperty("threadId", out var threadId));
-Assert.Equal("stream-meta-1", threadId.GetString());
-Assert.True(doc.RootElement.TryGetProperty("isStub", out var isStub));
-Assert.True(isStub.GetBoolean());
+var response = await _hub.InvokeAsync<CopilotResponse>(
+    "SendQuery",
+    new CopilotRequest("How many patients are in the panel?", "send-query-1"));
+
+Assert.NotNull(response);
+Assert.False(string.IsNullOrWhiteSpace(response.AgentUsed));
+Assert.Equal("send-query-1", response.ThreadId);
 ```
 
-Verifies the meta event carries the agent name, echoes back the correct thread ID, and reports the stub flag. This catches serialization mistakes where fields are omitted by the JSON options (e.g., camelCase policy turning `IsStub` into `isStub` but a typo sending `isstub`).
+Verifies the one-shot `SendQuery` method returns a complete `CopilotResponse` with the correct thread ID echoed back.
 
-### `Stream_done_event_contains_full_response`
+### `StreamQuery_emits_meta_delta_done`
 
 ```csharp
-Assert.True(resp.TryGetProperty("answer", out _));
-Assert.True(resp.TryGetProperty("citations", out _));
-Assert.True(resp.TryGetProperty("agentUsed", out _));
-Assert.True(resp.TryGetProperty("isStub", out _));
+Assert.True(events.Count >= 2, $"Expected at least 2 events (meta + done), got {events.Count}");
+Assert.Equal("meta", events[0].Type);
+Assert.Equal("done", events[^1].Type);
+if (events.Count >= 3)
+    Assert.Contains(events, e => e.Type == "delta");
 ```
 
-Verifies the done event contains a complete response with all required fields. This is a structural check -- it does not assert specific values, just that the shape is correct. It catches cases where a new field was added to `CopilotResponse` but the serializer skips it (e.g., because it is `null` and `DefaultIgnoreCondition` is set).
+Verifies the event ordering contract: meta first, at least one delta in the middle (when the LLM produces content), done last. This is the structural invariant that clients depend on for their state machines (show spinner → append text → finalize display).
 
-### `Stream_delta_content_reassembles_to_full_answer`
+### `StreamQuery_meta_has_agent_and_thread`
+
+```csharp
+var meta = events.First(e => e.Type == "meta");
+Assert.False(string.IsNullOrWhiteSpace(meta.AgentType));
+Assert.Equal("stream-meta-1", meta.ThreadId);
+Assert.False(meta.IsStub);
+```
+
+Verifies the meta event carries the agent name and echoes back the correct thread ID. Because `SignalRHubTests` uses a real LLM runner, `IsStub` is `false`.
+
+### `StreamQuery_deltas_reassemble_to_answer`
 
 The star of this tutorial. Covered in detail in Section 2 above.
+
+### `StreamQuery_preserves_threadId`
+
+```csharp
+var events1 = await CollectStreamEventsAsync(new CopilotRequest("How many patients?", threadId));
+Assert.Equal(threadId, events1.First(e => e.Type == "meta").ThreadId);
+
+var events2 = await CollectStreamEventsAsync(new CopilotRequest("Tell me more about the first one", threadId));
+Assert.Equal(threadId, events2.First(e => e.Type == "meta").ThreadId);
+```
+
+Verifies that the same `threadId` is preserved across multiple requests on the same connection, enabling multi-turn conversation state.
 
 ---
 
 ## 7. How to Apply This
 
-If you are building a streaming API -- whether SSE, WebSocket, or chunked transfer encoding -- add a reassembly test. Here is the pattern:
+If you are building a streaming API — whether SignalR, WebSocket, or chunked transfer encoding — add a reassembly test. Here is the pattern:
 
 1. **Send a request that produces a deterministic response.** Use a stub or seed data so the expected output is known.
-2. **Capture all incremental events.** Parse them into structured objects, not just raw strings.
-3. **Concatenate the incremental content.** Use `string.Concat` or equivalent -- no separators, no trimming, no normalization.
-4. **Extract the final/authoritative answer** from whatever "completion" signal your protocol uses.
+2. **Capture all incremental events.** Collect them into a list via `await foreach` — SignalR's `IAsyncEnumerable` streaming makes this straightforward.
+3. **Concatenate the incremental content.** Use `string.Concat` or equivalent — no separators, no trimming, no normalization.
+4. **Extract the final/authoritative answer** from whatever "completion" signal your protocol uses (the `done` event in this case).
 5. **Assert exact equality** between the concatenation and the final answer.
 
 This catches bugs that are invisible in manual testing:
@@ -396,6 +293,6 @@ This catches bugs that are invisible in manual testing:
 - A JSON serializer that escapes characters differently in a string field vs. a standalone value.
 - A race condition where the done event is assembled before the last delta is emitted, causing one version to have stale content.
 
-The cost of this test is minimal -- it runs in milliseconds, requires no external dependencies, and fails loudly with a diff showing exactly which characters diverged. The class of bugs it prevents would otherwise surface as garbled text in production, reported by users weeks later, and nearly impossible to reproduce.
+The cost of this test is minimal — it fails loudly with a diff showing exactly which characters diverged. The class of bugs it prevents would otherwise surface as garbled text in production, reported by users weeks later, and nearly impossible to reproduce.
 
 Write the test before you write the chunking code, and you will never ship a streaming endpoint that corrupts its own output.

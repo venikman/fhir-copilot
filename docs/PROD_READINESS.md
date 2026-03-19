@@ -12,13 +12,13 @@ This document captures known engineering gaps that are acceptable in the current
 | 4 | GenAI OTEL | `d0a6526` | `UseOpenTelemetry()` on IChatClient for GenAI semantic conventions |
 | 5 | Agent spans | `c1036c8` | `FhirCopilot.Agent` ActivitySource with copilot.request/stream spans |
 | 6 | IAgentRunner | `c0294be` | Extracted interface, DI-time runner selection |
-| 7 | Functional | `efc170f` | Primary constructor, immutable session, SseWriter, Calculator guard |
+| 7 | Functional | `efc170f` | Primary constructor, immutable session, Calculator guard |
 | 8 | Prod config | `46b2f61` | Dockerfile + fly.toml OTEL env vars |
 | 9 | Tests | `4f60957` | OTEL span tests, /alive test (38 total) |
 | 10 | Config cleanup | `d2bfff4` | Gemini default, .env loading, removed UseStubWhenProviderMissing |
 | 11 | Native Gemini SDK | `3292d7a` | Replaced OpenAI compat layer with Google_GenerativeAI native SDK |
 | 12 | Custom metrics | — | `FhirCopilot.Agent` meter: request counter, duration histogram, routing decisions, session lifecycle |
-| 13 | Error handling | `d3c1dd9` | Structured error responses on `/api/copilot` (502/504/500), LogError in CopilotService |
+| 13 | Error handling | `d3c1dd9` | Structured error responses via HubException (upstream_error/timeout/internal_error), LogError in CopilotService |
 | 14 | Model fallback | `229d355` | Gemini 429 fallback chain: flash → flash-lite → pro, configurable via `GeminiModels` |
 | 15 | Logging enrichment | `8e185b9` | Trace-enriched console formatter with trace/span IDs for local dev |
 | 16 | AppHost FHIR resource | `8b81b46` | FHIR backend as Aspire parameter resource with env var injection |
@@ -44,7 +44,7 @@ These were fixed because they teach good engineering habits regardless of contex
 | 1 | **Session race condition** | Moved all session access inside the semaphore in `GeminiAgentFrameworkRunner`. Removed the lock-free optimistic read that could race with LRU eviction. | Concurrency bugs are silent until they aren't. The pattern of "read outside lock, write inside lock" on mutable state is a classic defect. |
 | 2 | **Startup tool config validation** | `ToolRegistry.ValidateProfiles()` runs at startup and logs warnings for unknown tool names in agent configs. | A typo in `config/agents/*.json` silently disables a tool with no feedback. This is a debugging nightmare in a multi-agent system. |
 | 3 | **Misleading confidence signal** | Changed `BuildResponse` to always return `"unverified"` instead of deriving confidence from citation count. | Confidence based on "did the LLM mention a FHIR reference in its text" is actively misleading. A correct answer without slash-delimited references was tagged "low". Better to be honest than wrong. |
-| 4 | **Inconsistent error handling in HttpFhirBackend** | `FetchAllEntriesAsync` now logs and breaks on HTTP errors instead of throwing `HttpRequestException`. All paths (search, read, export) now log failures consistently and return empty/null results. | Search methods threw unhandled exceptions while read/export silently returned null. Pick one pattern and stick with it. |
+| 4 | **Removed production FHIR HTTP client** | `HttpFhirBackend` (573 lines, zero test coverage) was removed. The demo uses `SampleFhirBackend`. A production `IFhirBackend` implementation can be added when needed with proper error handling from the start. | Untested production code is worse than no production code — it gives false confidence. |
 | 5 | **Structured logging via ILogger** | Added `ILogger<T>` to `CopilotService`, `GeminiAgentFrameworkRunner`, `KeywordIntentRouter`, and `HttpFhirBackend`. Logs routing decisions, session lifecycle, FHIR errors, and agent runs. | ILogger is the standard .NET abstraction that OTEL, Seq, Application Insights, and every other sink hooks into. Adding it now means OTEL integration is a one-line `AddOpenTelemetry()` call later, not a retrofit. |
 
 ## Out of Scope (prototype/demo)

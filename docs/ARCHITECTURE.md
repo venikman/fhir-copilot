@@ -3,12 +3,13 @@
 ## Current control flow
 
 ```text
-HTTP / SSE request
+SignalR request (/hubs/copilot)
   -> KeywordIntentRouter
   -> Agent profile lookup (config file)
-  -> Runner boundary
-      -> GeminiAgentFrameworkRunner (if GEMINI_API_KEY set)
-      -> StubAgentRunner (default)
+  -> IAgentRunner (selected at startup via DI)
+      -> GeminiAgentFrameworkRunner (Mode=Gemini + GEMINI_API_KEY)
+      -> OpenAiCompatibleAgentRunner (Mode=Local)
+      -> InvalidOperationException (otherwise — fail fast)
   -> Response envelope
 ```
 
@@ -26,14 +27,14 @@ This starter preserves that outer shape, but moves runtime agent definitions int
 
 - The router is deterministic, not LLM-based.
 - Session persistence is in-memory, not durable.
-- Tool outputs come from `SampleFhirBackend`, not a real FHIR server.
+- Tool outputs come from `SampleFhirBackend` (hardcoded demo data). A production FHIR R4 client can be added by implementing `IFhirBackend`.
 - Export is simulated.
-- Tool-call traces are not yet surfaced from Agent Framework updates into the HTTP stream.
+- Tool-call traces are not yet surfaced from Agent Framework updates into the SignalR stream.
 
 ## Cutover plan
 
 ### Replace the backend
-Swap `SampleFhirBackend` with a Firely-backed `IFhirBackend` implementation. Keep the `FhirToolbox` signatures stable.
+Add a production `IFhirBackend` implementation (e.g., Firely SDK or raw `HttpClient`). Register it in `Program.cs` instead of `SampleFhirBackend`. Keep the `FhirToolbox` signatures stable.
 
 ### Replace the router
 Add a router agent that emits one of the six agent types, but preserve deterministic fallback for ambiguous or failed classifications.
