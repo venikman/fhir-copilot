@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FhirCopilot.Api.Contracts;
 using FhirCopilot.Api.Fhir;
 using FhirCopilot.Api.Hubs;
 using FhirCopilot.Api.Options;
@@ -46,23 +45,22 @@ builder.Services.AddSingleton<IAgentProfileStore, FileAgentProfileStore>();
 builder.Services.AddSingleton<IIntentRouter, KeywordIntentRouter>();
 
 var providerConfig = builder.Configuration.GetSection("Provider").Get<ProviderOptions>() ?? new ProviderOptions();
-if (providerConfig.HasFhirBaseUrl)
+
+if (!providerConfig.HasFhirBaseUrl)
 {
-    builder.Services.AddHttpClient("FhirApi", client =>
-    {
-        client.DefaultRequestHeaders.Add("Accept", "application/fhir+json");
-    });
-    builder.Services.AddSingleton<IFhirBackend>(sp =>
-    {
-        var factory = sp.GetRequiredService<IHttpClientFactory>();
-        var logger = sp.GetRequiredService<ILogger<HttpFhirBackend>>();
-        return new HttpFhirBackend(factory, providerConfig.FhirBaseUrl!, logger);
-    });
+    throw new InvalidOperationException(
+        "Provider:FhirBaseUrl is required. Set it to a FHIR R4 server URL (e.g., https://bulk-fhir.fly.dev/fhir).");
 }
-else
+
+builder.Services.AddHttpClient("FhirApi", client =>
 {
-    builder.Services.AddSingleton<IFhirBackend, SampleFhirBackend>();
-}
+    client.BaseAddress = new Uri(providerConfig.FhirBaseUrl!.TrimEnd('/') + "/");
+    client.DefaultRequestHeaders.Add("Accept", "application/fhir+json");
+});
+builder.Services.AddSingleton<IFhirBackend>(sp =>
+    new HttpFhirBackend(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        sp.GetRequiredService<ILogger<HttpFhirBackend>>()));
 
 builder.Services.AddSingleton<FhirToolbox>();
 
@@ -105,52 +103,7 @@ app.MapDefaultEndpoints();
 
 app.MapHub<CopilotHub>("/hubs/copilot");
 
-app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is running. See /health or /api/copilot."));
-
-app.MapPost("/api/copilot", async (CopilotRequest request, ICopilotService service, CancellationToken cancellationToken) =>
-{
-    try
-    {
-        var response = await service.RunAsync(request, cancellationToken);
-        return Results.Ok(response);
-    }
-    catch (HttpRequestException)
-    {
-        return Results.Json(
-            new CopilotErrorResponse(new CopilotError("upstream_error", "The AI service returned an error. Please retry.")),
-            statusCode: StatusCodes.Status502BadGateway);
-    }
-    catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-    {
-        return Results.Json(
-            new CopilotErrorResponse(new CopilotError("timeout", "The request timed out. Please retry.")),
-            statusCode: StatusCodes.Status504GatewayTimeout);
-    }
-    catch (ArgumentException ex)
-    {
-        return Results.Json(
-            new CopilotErrorResponse(new CopilotError("invalid_request", ex.Message)),
-            statusCode: StatusCodes.Status400BadRequest);
-    }
-    catch (Exception)
-    {
-        return Results.Json(
-            new CopilotErrorResponse(new CopilotError("internal_error", "An unexpected error occurred.")),
-            statusCode: StatusCodes.Status500InternalServerError);
-    }
-});
-
-// POST keeps clinical queries out of URLs, server logs, and browser history.
-// FHIR R4 spec endorses POST-based search (POST [base]/[type]/_search) for the same reason.
-// See: https://hl7.org/fhir/R4/search.html and https://hl7.org/fhir/security.html
-app.MapPost("/api/copilot/stream", async (
-    HttpContext httpContext,
-    CopilotRequest request,
-    ICopilotService service,
-    CancellationToken cancellationToken) =>
-{
-    await SseWriter.WriteAsync(httpContext, service.StreamAsync(request, cancellationToken), cancellationToken);
-});
+app.MapGet("/", () => Results.Text("FHIR Copilot Agent Framework Starter is running. Connect via SignalR at /hubs/copilot. See /health."));
 
 app.Run();
 
