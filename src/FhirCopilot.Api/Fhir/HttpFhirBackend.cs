@@ -11,12 +11,8 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
 {
     private HttpClient CreateClient() => httpClientFactory.CreateClient("FhirApi");
 
-    public async Task<IReadOnlyList<GroupRecord>> SearchGroupsAsync(string? query, CancellationToken ct = default)
-    {
-        var url = string.IsNullOrWhiteSpace(query) ? "Group" : $"Group?name:contains={Uri.EscapeDataString(query)}";
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapGroup).Where(g => g is not null).Select(g => g!).ToList();
-    }
+    public Task<IReadOnlyList<GroupRecord>> SearchGroupsAsync(string? query, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Group", ("name:contains", query)), MapGroup, ct);
 
     public async Task<object?> ReadResourceAsync(string resourceType, string id, CancellationToken ct = default)
     {
@@ -41,71 +37,34 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
         return entries.Select(e => (object)e).ToList();
     }
 
-    public async Task<IReadOnlyList<PatientRecord>> SearchPatientsAsync(string? name, string? gender, string? birthYearFrom, string? birthYearTo, string? generalPractitioner, CancellationToken ct = default)
-    {
-        var parts = new List<string> { "Patient?" };
-        if (!string.IsNullOrWhiteSpace(name)) parts.Add($"name:contains={Uri.EscapeDataString(name)}");
-        if (!string.IsNullOrWhiteSpace(gender)) parts.Add($"gender={Uri.EscapeDataString(gender)}");
-        if (!string.IsNullOrWhiteSpace(generalPractitioner)) parts.Add($"general-practitioner:contains={Uri.EscapeDataString(generalPractitioner)}");
-        var url = parts[0] + string.Join("&", parts.Skip(1));
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapPatient).Where(p => p is not null).Select(p => p!).ToList();
-    }
+    public Task<IReadOnlyList<PatientRecord>> SearchPatientsAsync(string? name, string? gender, string? birthYearFrom, string? birthYearTo, string? generalPractitioner, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Patient",
+            ("name:contains", name), ("gender", gender),
+            ("general-practitioner:contains", generalPractitioner)), MapPatient, ct);
 
-    public async Task<IReadOnlyList<EncounterRecord>> SearchEncountersAsync(string? patientId, string? status, string? type, string? reasonCode, string? practitioner, string? location, string? dateFrom, string? dateTo, CancellationToken ct = default)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(patientId)) parts.Add($"patient={Uri.EscapeDataString(patientId)}");
-        if (!string.IsNullOrWhiteSpace(status)) parts.Add($"status={Uri.EscapeDataString(status)}");
-        if (!string.IsNullOrWhiteSpace(dateFrom)) parts.Add($"date=ge{Uri.EscapeDataString(dateFrom)}");
-        if (!string.IsNullOrWhiteSpace(dateTo)) parts.Add($"date=le{Uri.EscapeDataString(dateTo)}");
-        var url = "Encounter?" + string.Join("&", parts);
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapEncounter).Where(e => e is not null).Select(e => e!).ToList();
-    }
+    public Task<IReadOnlyList<EncounterRecord>> SearchEncountersAsync(string? patientId, string? status, string? type, string? reasonCode, string? practitioner, string? location, string? dateFrom, string? dateTo, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Encounter",
+            ("patient", patientId), ("status", status),
+            ("date", !string.IsNullOrWhiteSpace(dateFrom) ? $"ge{dateFrom}" : null),
+            ("date", !string.IsNullOrWhiteSpace(dateTo) ? $"le{dateTo}" : null)), MapEncounter, ct);
 
-    public async Task<IReadOnlyList<ConditionRecord>> SearchConditionsAsync(string? patientId, string? code, string? clinicalStatus, string? category, CancellationToken ct = default)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(patientId)) parts.Add($"patient={Uri.EscapeDataString(patientId)}");
-        if (!string.IsNullOrWhiteSpace(code)) parts.Add($"code={Uri.EscapeDataString(code)}");
-        if (!string.IsNullOrWhiteSpace(clinicalStatus)) parts.Add($"clinical-status={Uri.EscapeDataString(clinicalStatus)}");
-        if (!string.IsNullOrWhiteSpace(category)) parts.Add($"category={Uri.EscapeDataString(category)}");
-        var url = "Condition?" + string.Join("&", parts);
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapCondition).Where(c => c is not null).Select(c => c!).ToList();
-    }
+    public Task<IReadOnlyList<ConditionRecord>> SearchConditionsAsync(string? patientId, string? code, string? clinicalStatus, string? category, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Condition",
+            ("patient", patientId), ("code", code),
+            ("clinical-status", clinicalStatus), ("category", category)), MapCondition, ct);
 
-    public async Task<IReadOnlyList<ObservationRecord>> SearchObservationsAsync(string? patientId, string? code, string? category, string? dateFrom, string? dateTo, CancellationToken ct = default)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(patientId)) parts.Add($"patient={Uri.EscapeDataString(patientId)}");
-        if (!string.IsNullOrWhiteSpace(code)) parts.Add($"code={Uri.EscapeDataString(code)}");
-        if (!string.IsNullOrWhiteSpace(category)) parts.Add($"category={Uri.EscapeDataString(category)}");
-        if (!string.IsNullOrWhiteSpace(dateFrom)) parts.Add($"date=ge{Uri.EscapeDataString(dateFrom)}");
-        if (!string.IsNullOrWhiteSpace(dateTo)) parts.Add($"date=le{Uri.EscapeDataString(dateTo)}");
-        var url = "Observation?" + string.Join("&", parts);
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapObservation).Where(o => o is not null).Select(o => o!).ToList();
-    }
+    public Task<IReadOnlyList<ObservationRecord>> SearchObservationsAsync(string? patientId, string? code, string? category, string? dateFrom, string? dateTo, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("Observation",
+            ("patient", patientId), ("code", code), ("category", category),
+            ("date", !string.IsNullOrWhiteSpace(dateFrom) ? $"ge{dateFrom}" : null),
+            ("date", !string.IsNullOrWhiteSpace(dateTo) ? $"le{dateTo}" : null)), MapObservation, ct);
 
-    public async Task<IReadOnlyList<MedicationRecord>> SearchMedicationsAsync(string? patientId, string? status, string? code, CancellationToken ct = default)
-    {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(patientId)) parts.Add($"patient={Uri.EscapeDataString(patientId)}");
-        if (!string.IsNullOrWhiteSpace(status)) parts.Add($"status={Uri.EscapeDataString(status)}");
-        if (!string.IsNullOrWhiteSpace(code)) parts.Add($"code={Uri.EscapeDataString(code)}");
-        var url = "MedicationRequest?" + string.Join("&", parts);
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapMedication).Where(m => m is not null).Select(m => m!).ToList();
-    }
+    public Task<IReadOnlyList<MedicationRecord>> SearchMedicationsAsync(string? patientId, string? status, string? code, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("MedicationRequest",
+            ("patient", patientId), ("status", status), ("code", code)), MapMedication, ct);
 
-    public async Task<IReadOnlyList<AllergyRecord>> SearchAllergiesAsync(string? patientId, CancellationToken ct = default)
-    {
-        var url = string.IsNullOrWhiteSpace(patientId) ? "AllergyIntolerance" : $"AllergyIntolerance?patient={Uri.EscapeDataString(patientId)}";
-        var entries = await FetchBundleEntries(url, ct);
-        return entries.Select(MapAllergy).Where(a => a is not null).Select(a => a!).ToList();
-    }
+    public Task<IReadOnlyList<AllergyRecord>> SearchAllergiesAsync(string? patientId, CancellationToken ct = default) =>
+        SearchAsync(BuildSearchUrl("AllergyIntolerance", ("patient", patientId)), MapAllergy, ct);
 
     public async Task<ExportSummary> BulkExportAsync(string groupId, CancellationToken ct = default)
     {
@@ -120,6 +79,23 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
             ["Patient"] = group.MemberPatientIds.Count,
             ["Group"] = 1
         });
+    }
+
+    // --- Pure URL builder ---
+
+    private static string BuildSearchUrl(string resourceType, params (string param, string? value)[] filters) =>
+        filters
+            .Where(f => !string.IsNullOrWhiteSpace(f.value))
+            .Select(f => $"{f.param}={Uri.EscapeDataString(f.value!)}")
+            .Aggregate(resourceType, (url, param) => $"{url}{(url.Contains('?') ? '&' : '?')}{param}");
+
+    // --- Generic search-and-map pipeline ---
+
+    private async Task<IReadOnlyList<T>> SearchAsync<T>(
+        string url, Func<JsonElement, T> mapper, CancellationToken ct)
+    {
+        var entries = await FetchBundleEntries(url, ct);
+        return entries.Select(mapper).ToList();
     }
 
     // --- Bundle fetching ---
@@ -171,7 +147,7 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
         return "";
     }
 
-    private static GroupRecord? MapGroup(JsonElement r)
+    private static GroupRecord MapGroup(JsonElement r)
     {
         var members = new List<string>();
         if (r.TryGetProperty("member", out var arr))
@@ -182,7 +158,7 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
         return new GroupRecord(Str(r, "id"), Str(r, "name"), Str(r, "description"), members);
     }
 
-    private static PatientRecord? MapPatient(JsonElement r)
+    private static PatientRecord MapPatient(JsonElement r)
     {
         var name = "";
         if (r.TryGetProperty("name", out var names) && names.GetArrayLength() > 0)
@@ -201,18 +177,18 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
             Ref(r, "managingOrganization"), Ref(r, "generalPractitioner"), "", "");
     }
 
-    private static EncounterRecord? MapEncounter(JsonElement r) =>
+    private static EncounterRecord MapEncounter(JsonElement r) =>
         new(Str(r, "id"), Ref(r, "subject"),
             Coding(r, "type"), Coding(r, "type", "display"),
             Coding(r, "reasonCode"), Ref(r, "participant"),
             Ref(r, "location"), Str(r, "period"), Str(r, "status"));
 
-    private static ConditionRecord? MapCondition(JsonElement r) =>
+    private static ConditionRecord MapCondition(JsonElement r) =>
         new(Str(r, "id"), Ref(r, "subject"),
             Coding(r, "code"), Coding(r, "code", "display"),
             Coding(r, "clinicalStatus"), Coding(r, "category"));
 
-    private static ObservationRecord? MapObservation(JsonElement r)
+    private static ObservationRecord MapObservation(JsonElement r)
     {
         var value = "";
         var unit = "";
@@ -227,12 +203,12 @@ public sealed class HttpFhirBackend(IHttpClientFactory httpClientFactory, ILogge
             value, unit, Coding(r, "category"), Str(r, "effectiveDateTime"));
     }
 
-    private static MedicationRecord? MapMedication(JsonElement r) =>
+    private static MedicationRecord MapMedication(JsonElement r) =>
         new(Str(r, "id"), Ref(r, "subject"),
             Coding(r, "medicationCodeableConcept"), Coding(r, "medicationCodeableConcept", "display"),
             Str(r, "status"), Str(r, "authoredOn"));
 
-    private static AllergyRecord? MapAllergy(JsonElement r) =>
+    private static AllergyRecord MapAllergy(JsonElement r) =>
         new(Str(r, "id"), Ref(r, "patient"),
             Coding(r, "code"), Coding(r, "code", "display"),
             Str(r, "criticality"), Coding(r, "clinicalStatus"));

@@ -27,25 +27,17 @@ public sealed class KeywordIntentRouter : IIntentRouter
     public Task<string> RouteAsync(string query, CancellationToken cancellationToken)
     {
         var normalized = query.Trim().ToLowerInvariant();
-        var scores = AgentTypes.All.ToDictionary(agent => agent, _ => 0, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (agentType, hints) in _normalizedHints)
-        {
-            if (!scores.ContainsKey(agentType))
-                continue;
+        var selected = _normalizedHints
+            .Where(kvp => AgentTypes.All.Contains(kvp.Key))
+            .Select(kvp => (Agent: kvp.Key, Score: kvp.Value.Count(hint => normalized.Contains(hint, StringComparison.Ordinal))))
+            .Where(x => x.Score > 0)
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Agent, StringComparer.Ordinal)
+            .Select(x => x.Agent)
+            .FirstOrDefault() ?? _router.FallbackAgent;
 
-            foreach (var hint in hints)
-            {
-                if (normalized.Contains(hint, StringComparison.Ordinal))
-                {
-                    scores[agentType] += 1;
-                }
-            }
-        }
-
-        var best = scores.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key, StringComparer.Ordinal).FirstOrDefault();
-        var selected = best.Value > 0 ? best.Key : _router.FallbackAgent;
-        _logger.LogDebug("Router scores: {Scores}, selected: {Selected}", scores.Where(s => s.Value > 0).ToDictionary(s => s.Key, s => s.Value), selected);
+        _logger.LogDebug("Router selected: {Selected} for query", selected);
         return Task.FromResult(selected);
     }
 }

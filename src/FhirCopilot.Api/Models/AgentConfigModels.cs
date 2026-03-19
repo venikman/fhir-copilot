@@ -15,7 +15,7 @@ public sealed record RouterProfile
 {
     public string Name { get; init; } = "router";
     public string FallbackAgent { get; init; } = "clinical";
-    public Dictionary<string, string[]> KeywordHints { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    public IReadOnlyDictionary<string, string[]> KeywordHints { get; init; } = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
 }
 
 public static class AgentTypes
